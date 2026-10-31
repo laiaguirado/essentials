@@ -1,0 +1,104 @@
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f7fb;
+}
+
+.auth-card {
+  width: min(100%, 400px);
+  display: grid;
+  gap: 16px;
+  padding: 32px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.auth-card h1,
+.auth-card p {
+  margin: 0;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.auth-card input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccd2db;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.auth-card button,
+.account-message button {
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #4285f4;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-card button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.auth-card .auth-toggle {
+  background: transparent;
+  color: #245eb5;
+}
+
+.auth-error {
+  color: #b42318;
+}
+
+.auth-success {
+  color: #067647;
+}
+
+.account-message {
+  max-width: 720px;
+  margin: 32px auto;
+  padding: 20px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #663c00;
+}
+
+.account-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #f5f7fb;
+  color: #333;
+}
+
+.account-bar button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: #6c757d;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.save-warning {
+  margin: 0;
+  padding: 10px 20px;
+  background: #fff4e5;
+  color: #663c00;
+  text-align: center;
+}

@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useUserData } from './auth/useUserData.js'
 
 function Expenses() {
-  const [expenses, setExpenses] = useState([])
+  const [expenses, setExpenses] = useUserData('expenses', [])
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('general')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
@@ -18,7 +18,7 @@ function Expenses() {
   const [hoveredCategory, setHoveredCategory] = useState(null)
   const [editingExpenseId, setEditingExpenseId] = useState(null)
   const [editingValues, setEditingValues] = useState(null)
-  const [categoryBudgets, setCategoryBudgets] = useState({})
+  const [savedCategoryBudgets, setCategoryBudgets] = useUserData('expenseBudgets', {})
   const [budgetMonth, setBudgetMonth] = useState(() => {
     const today = new Date()
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
@@ -26,7 +26,6 @@ function Expenses() {
   const initialBudgetMonth = useRef(budgetMonth)
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null)
   const [budgetDraft, setBudgetDraft] = useState('')
-  const [areBudgetsLoaded, setAreBudgetsLoaded] = useState(false)
 
   const categories = [
     { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
@@ -40,48 +39,20 @@ function Expenses() {
     { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' }
   ]
 
-  useEffect(() => {
-    const savedExpenses = localStorage.getItem('expenses')
-    if (savedExpenses) {
-      setExpenses(JSON.parse(savedExpenses).map(expense =>
-        expense.category === 'comida' ? { ...expense, category: 'restaurantes' } : expense
-      ))
-    }
-    setIsLoading(false)
-  }, [])
-
-  useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem('expenses', JSON.stringify(expenses))
-    }
-  }, [expenses, isLoading])
-
-  useEffect(() => {
-    const savedBudgets = localStorage.getItem('expenseBudgets')
-    if (savedBudgets) {
-      const parsedBudgets = JSON.parse(savedBudgets)
-      const hasMonthSpecificBudgets = Object.keys(parsedBudgets).some(key => /^\d{4}-\d{2}$/.test(key))
-      const monthBudgets = hasMonthSpecificBudgets ? parsedBudgets : { [initialBudgetMonth.current]: parsedBudgets }
-      const migratedBudgets = Object.fromEntries(
-        Object.entries(monthBudgets).map(([month, budgets]) => {
-          const migratedMonth = { ...budgets }
-          if (migratedMonth.restaurantes === undefined && migratedMonth.comida !== undefined) {
-            migratedMonth.restaurantes = migratedMonth.comida
-          }
-          delete migratedMonth.comida
-          return [month, migratedMonth]
-        })
-      )
-      setCategoryBudgets(migratedBudgets)
-    }
-    setAreBudgetsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    if (areBudgetsLoaded) {
-      localStorage.setItem('expenseBudgets', JSON.stringify(categoryBudgets))
-    }
-  }, [categoryBudgets, areBudgetsLoaded])
+  const hasMonthSpecificBudgets = Object.keys(savedCategoryBudgets).some(key => /^\d{4}-\d{2}$/.test(key))
+  const monthBudgets = hasMonthSpecificBudgets
+    ? savedCategoryBudgets
+    : { [initialBudgetMonth.current]: savedCategoryBudgets }
+  const categoryBudgets = Object.fromEntries(
+    Object.entries(monthBudgets).map(([month, budgets]) => {
+      const migratedMonth = { ...budgets }
+      if (migratedMonth.restaurantes === undefined && migratedMonth.comida !== undefined) {
+        migratedMonth.restaurantes = migratedMonth.comida
+      }
+      delete migratedMonth.comida
+      return [month, migratedMonth]
+    })
+  )
 
   const resetExpenseForm = () => {
     setDescription('')

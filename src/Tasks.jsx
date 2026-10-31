@@ -1,36 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useUserData } from './auth/useUserData.js'
 import './App.css'
 
 function Tasks() {
-  const [tasks, setTasks] = useState([])
+  const [tasks, setTasks] = useUserData('dailyTasks', [])
   const [newTask, setNewTask] = useState('')
   const [showCompleted, setShowCompleted] = useState(true) // Set to true by default
-
-  // Load tasks from localStorage on component mount
-  useEffect(() => {
-    const savedTasks = localStorage.getItem('dailyTasks')
-    if (savedTasks) {
-      try {
-        const parsedTasks = JSON.parse(savedTasks)
-        setTasks(parsedTasks)
-      } catch (error) {
-        console.error('Error loading tasks:', error)
-        // If there's an error, start with empty tasks
-        setTasks([])
-      }
-    } else {
-      // Start with empty tasks if no saved tasks exist
-      setTasks([])
-    }
-  }, [])
-
-  // Save tasks to localStorage whenever they change
-  useEffect(() => {
-    if (tasks.length > 0) {
-      localStorage.setItem('dailyTasks', JSON.stringify(tasks))
-    }
-  }, [tasks])
 
   const addTask = () => {
     if (newTask.trim()) {
@@ -58,7 +34,6 @@ function Tasks() {
   const clearAllTasks = () => {
     if (window.confirm('Are you sure you want to clear ALL tasks? This action cannot be undone.')) {
       setTasks([])
-      localStorage.removeItem('dailyTasks')
     }
   }
 

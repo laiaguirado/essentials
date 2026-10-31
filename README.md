@@ -1,21 +1,23 @@
 # Essentials
 
-Essentials is a React app built with Vite.
+Essentials is a personal productivity dashboard that brings everyday tools and
+useful information together in one place. It is designed to make routine
+planning, habit tracking, and personal budgeting quick and accessible.
 
-## Run locally
+## What it includes
 
-```sh
-npm ci
-npm run dev
-```
+- **Daily tasks:** create, complete, and organize a personal to-do list.
+- **Habit tracking:** track daily habits and follow completion streaks.
+- **Expense tracking:** record and review expenses, organize them by category,
+  and set monthly category budgets.
+- **Quick tools:** generate a random number, flip a coin, and change the
+  dashboard background.
+- **Reference links:** browse useful resources grouped into topics such as
+  basics, media, programming, social networks, and travel.
+- **Personal accounts:** sign up or sign in with email and password. Supabase
+  stores each account's tasks, habits, expenses, and budgets separately, with
+  Row Level Security policies restricting access to the data owner.
 
-## Publish on GitHub Pages
-
-The site is configured for this repository's GitHub Pages URL:
-`https://laiaguirado.github.io/essentials/`.
-
-1. Push changes to the `main` branch, or run the **Deploy to GitHub Pages**
-   workflow manually from the Actions tab.
-2. In the repository, open **Settings → Pages** and set the build and deployment
-   source to **GitHub Actions**.
-3. Wait for the workflow to finish, then open the Pages URL above.
+The frontend is built with React and Vite. Supabase provides authentication
+and cloud data storage; GitHub Actions builds and deploys the site to GitHub
+Pages.

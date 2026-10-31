@@ -1,81 +1,44 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useUserData } from './auth/useUserData.js'
 import './App.css'
 
 function Habits() {
-  const [habits, setHabits] = useState({
+  const today = new Date().toDateString()
+  const defaultHabits = {
     gym: { completed: false, streak: 0, emoji: '💪', name: 'Gym' },
     water: { completed: false, streak: 0, emoji: '💧', name: 'Water (8 glasses)' },
     noSweets: { completed: false, streak: 0, emoji: '🚫🍭', name: 'No Sweets' }
-  })
-  const [isLoading, setIsLoading] = useState(true)
-
-  // Load habits from localStorage on component mount
-  useEffect(() => {
-    const savedHabits = localStorage.getItem('dailyHabits')
-    const today = new Date().toDateString()
-    
-    console.log('Loading from localStorage:', savedHabits)
-    console.log('Today:', today)
-    
-    if (savedHabits) {
-      try {
-        const parsed = JSON.parse(savedHabits)
-        console.log('Parsed data:', parsed)
-        console.log('Saved date:', parsed.date)
-        console.log('Today date:', today)
-        console.log('Date comparison:', parsed.date === today)
-        
-        // Check if it's same day
-        if (parsed.date === today) {
-          console.log('Same day, loading habits:', parsed.habits)
-          setHabits(parsed.habits)
-        } else {
-          console.log('New day detected, but keeping saved habits structure')
-          // New day, reset completed status but keep saved habits and streaks
-          const resetHabits = {}
-          Object.keys(parsed.habits).forEach(key => {
-            resetHabits[key] = {
-              ...parsed.habits[key],
-              completed: false
-            }
-          })
-          setHabits(resetHabits)
-        }
-      } catch (error) {
-        console.error('Error loading habits:', error)
-      }
-    } else {
-      console.log('No saved habits found, using defaults')
-    }
-    setIsLoading(false)
-  }, [])
-
-  // Save habits to localStorage whenever they change (but not during initial load)
-  useEffect(() => {
-    if (!isLoading) {
-      const today = new Date().toDateString()
-      const dataToSave = {
-        date: today,
-        habits: habits
-      }
-      console.log('Saving to localStorage:', dataToSave)
-      localStorage.setItem('dailyHabits', JSON.stringify(dataToSave))
-    }
-  }, [habits, isLoading])
+  }
+  const [savedHabits, setSavedHabits] = useUserData('dailyHabits', null)
+  const habits = savedHabits?.habits
+    ? Object.fromEntries(Object.entries(savedHabits.habits).map(([key, habit]) => [
+      key,
+      { ...habit, completed: savedHabits.date === today && habit.completed },
+    ]))
+    : defaultHabits
 
   const toggleHabit = (habitKey) => {
-    setHabits(prev => {
-      const newHabits = {
-        ...prev,
-        [habitKey]: {
-          ...prev[habitKey],
-          completed: !prev[habitKey].completed,
-          streak: !prev[habitKey].completed ? prev[habitKey].streak + 1 : prev[habitKey].streak
-        }
+    setSavedHabits(previous => {
+      const currentHabits = previous?.habits
+        ? Object.fromEntries(Object.entries(previous.habits).map(([key, habit]) => [
+          key,
+          { ...habit, completed: previous.date === today && habit.completed },
+        ]))
+        : defaultHabits
+
+      return {
+        date: today,
+        habits: {
+          ...currentHabits,
+          [habitKey]: {
+            ...currentHabits[habitKey],
+            completed: !currentHabits[habitKey].completed,
+            streak: !currentHabits[habitKey].completed
+              ? currentHabits[habitKey].streak + 1
+              : currentHabits[habitKey].streak,
+          },
+        },
       }
-      console.log('Habits updated:', newHabits)
-      return newHabits
     })
   }
 
