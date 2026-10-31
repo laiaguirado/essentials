@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import './App.css'
 
 function Habits() {
@@ -86,8 +87,8 @@ function Habits() {
     <div style={{ minHeight: '100vh', padding: '2rem', backgroundColor: '#f8f9fa' }}>
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         <div style={{ textAlign: 'left', marginBottom: '15px' }}>
-          <a
-            href="/"
+          <Link
+            to="/"
             style={{
               display: 'inline-block',
               padding: '10px 16px',
@@ -99,7 +100,7 @@ function Habits() {
             }}
           >
             ← Back to Essentials
-          </a>
+          </Link>
         </div>
         <h1>🎯 Daily Habits Tracker</h1>
         

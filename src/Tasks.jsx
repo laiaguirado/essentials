@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import './App.css'
 
 function Tasks() {
@@ -68,8 +69,8 @@ function Tasks() {
     <div style={{ minHeight: '100vh', padding: '2rem', backgroundColor: '#f5f5f5' }}>
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         <div style={{ textAlign: 'left', marginBottom: '15px' }}>
-          <a
-            href="/"
+          <Link
+            to="/"
             style={{
               display: 'inline-block',
               padding: '10px 16px',
@@ -81,7 +82,7 @@ function Tasks() {
             }}
           >
             ← Back to Essentials
-          </a>
+          </Link>
         </div>
         <h1>Daily Tasks</h1>
         

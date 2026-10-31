@@ -1,35 +1,21 @@
 # Essentials
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Essentials is a React app built with Vite.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.org/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc/README.md) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top level `parserOptions` property like this:
-
-```js
-export default [
-  // ...
-  {
-    files: ['**/*.{js,jsx}'],
-    // ...
-    languageOptions: {
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        ecmaFeatures: { jsx: true },
-        project: ['./tsconfig.json', './tsconfig.node.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
-]
+```sh
+npm ci
+npm run dev
 ```
 
-- Replace `tsconfig.json` and `tsconfig.node.json` with the paths to your TypeScript configuration files if they are located elsewhere.
+## Publish on GitHub Pages
+
+The site is configured for this repository's GitHub Pages URL:
+`https://laiaguirado.github.io/essentials/`.
+
+1. Push changes to the `main` branch, or run the **Deploy to GitHub Pages**
+   workflow manually from the Actions tab.
+2. In the repository, open **Settings → Pages** and set the build and deployment
+   source to **GitHub Actions**.
+3. Wait for the workflow to finish, then open the Pages URL above.

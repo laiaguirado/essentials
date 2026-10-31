@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 
 function Expenses() {
   const [expenses, setExpenses] = useState([])
@@ -304,8 +305,8 @@ function Expenses() {
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
       <div style={{ textAlign: 'left', marginBottom: '15px' }}>
-        <a
-          href="/"
+        <Link
+          to="/"
           style={{
             display: 'inline-block',
             padding: '10px 16px',
@@ -317,7 +318,7 @@ function Expenses() {
           }}
         >
           ← Volver al Inicio
-        </a>
+        </Link>
       </div>
       <h1 style={{ color: '#333', marginBottom: '20px', textAlign: 'center' }}>
         💰 Control de Gastos
