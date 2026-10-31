@@ -1,0 +1,324 @@
+:root {
+  --text-color: #333;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-color, #ffffff);
+  transition: background-color 0.3s ease;
+}
+
+#root {
+  max-width: 1280px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+  min-height: 100vh;
+  color: var(--text-color);
+}
+
+.card {
+  padding: 2em;
+}
+
+.funcionalities-container {
+  display: block;
+  text-align: center;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.funcionalities-container button {
+  margin: 0 5px;
+}
+
+.basic-container {
+  display: block;
+  text-align: center;
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 1rem;
+}
+
+.basic-container button {
+  margin: 0 5px;
+}
+
+.sections-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  margin: 2em 0;
+}
+
+.basics-section,
+.media-section,
+.programming-section,
+.rrss-section,
+.travels-section {
+  flex: 1 1 calc(33.333% - 14px);
+  min-width: 250px;
+  margin: 0;
+  padding: 1.5em;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.basics-section h2,
+.media-section h2,
+.programming-section h2,
+.rrss-section h2,
+.travels-section h2 {
+  margin-bottom: 1em;
+  color: #333;
+}
+
+.basics-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.basics-buttons button {
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-weight: bold;
+}
+
+.basics-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.google-btn {
+  background-color: #4285f4;
+  color: white;
+}
+
+.google-btn:hover {
+  background-color: #357ae8;
+}
+
+.gmail-btn {
+  background-color: #ea4335;
+  color: white;
+}
+
+.gmail-btn:hover {
+  background-color: #d23321;
+}
+
+.translator-btn {
+  background-color: #34a853;
+  color: white;
+}
+
+.translator-btn:hover {
+  background-color: #2d8f47;
+}
+
+.drive-btn {
+  background-color: #4285f4;
+  color: white;
+}
+
+.drive-btn:hover {
+  background-color: #357ae8;
+}
+
+.photos-btn {
+  background-color: #9c27b0;
+  color: white;
+}
+
+.photos-btn:hover {
+  background-color: #7b1fa2;
+}
+
+.youtube-btn {
+  background-color: #ff0000;
+  color: white;
+}
+
+.youtube-btn:hover {
+  background-color: #cc0000;
+}
+
+.netflix-btn {
+  background-color: #000000;
+  color: #ff0000;
+}
+
+.netflix-btn:hover {
+  background-color: #333333;
+}
+
+.instagram-btn {
+  background-color: #ff6600;
+  color: white;
+}
+
+.instagram-btn:hover {
+  background-color: #e55a00;
+}
+
+.twitch-btn {
+  background-color: #9146ff;
+  color: white;
+}
+
+.twitch-btn:hover {
+  background-color: #772ce8;
+}
+
+.programming-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.programming-buttons button {
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-weight: bold;
+}
+
+.programming-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.github-btn {
+  background-color: #24292e;
+  color: white;
+}
+
+.github-btn:hover {
+  background-color: #0366d6;
+}
+
+.figma-btn {
+  background-color: #f24e1e;
+  color: white;
+}
+
+.figma-btn:hover {
+  background-color: #d5390c;
+}
+
+.stackoverflow-btn {
+  background-color: #f48024;
+  color: white;
+}
+
+.stackoverflow-btn:hover {
+  background-color: #e37416;
+}
+
+.rrss-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rrss-buttons button {
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-weight: bold;
+}
+
+.rrss-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.tiktok-btn {
+  background-color: #000000;
+  color: white;
+}
+
+.tiktok-btn:hover {
+  background-color: #333333;
+}
+
+.travels-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.travels-buttons button {
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-weight: bold;
+}
+
+.travels-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.booking-btn {
+  background-color: #003580;
+  color: white;
+}
+
+.booking-btn:hover {
+  background-color: #002860;
+}
+
+.vueling-btn {
+  background-color: #0d2c54;
+  color: white;
+}
+
+.vueling-btn:hover {
+  background-color: #0a1f3d;
+}
+
+.ryanair-btn {
+  background-color: #fdd404;
+  color: #003580;
+}
+
+.ryanair-btn:hover {
+  background-color: #e6c003;
+}
+
+.skyscanner-btn {
+  background-color: #0770e3;
+  color: white;
+}
+
+.skyscanner-btn:hover {
+  background-color: #0056b3;
+}
+
+.read-the-docs {
+  color: #888;
+}
