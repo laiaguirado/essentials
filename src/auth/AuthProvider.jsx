@@ -7,14 +7,16 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [error, setError] = useState('')
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false)
 
   useEffect(() => {
     if (!supabase) return undefined
 
     let active = true
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (active) {
         setSession(nextSession)
+        if (event === 'PASSWORD_RECOVERY') setIsRecoveringPassword(true)
         setError('')
         setLoading(false)
       }
@@ -50,6 +52,13 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  const resetPasswordForEmail = async (email) => {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+    })
+    if (resetError) throw resetError
+  }
+
   const signOut = async () => {
     const { error: signOutError } = await supabase.auth.signOut()
     if (signOutError) throw signOutError
@@ -63,7 +72,10 @@ export function AuthProvider({ children }) {
       setError,
       signIn,
       signUp,
+      resetPasswordForEmail,
       signOut,
+      isRecoveringPassword,
+      setIsRecoveringPassword,
     }}>
       {children}
     </AuthContext.Provider>

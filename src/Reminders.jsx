@@ -133,7 +133,7 @@ function Reminders() {
     <main className="reminders-page">
       <div className="reminders-container">
         <Link className="reminders-back-link" to="/">← Volver a Essentials</Link>
-        <h1>📅 Recordatorios</h1>
+        <h1>Recordatorios</h1>
         <p className="reminders-intro">Organiza lo que tienes que hacer por fecha y categoría.</p>
 
         <form className="reminder-form" onSubmit={addReminder}>
@@ -179,7 +179,7 @@ function Reminders() {
                         setCategory('')
                       }}
                     >
-                      Elegir una categoría existente
+                      Usar existente
                     </button>
                   )}
                 </div>

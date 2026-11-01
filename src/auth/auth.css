@@ -127,3 +127,23 @@
     padding: 10px 14px;
   }
 }
+
+.account-bar { position: relative; z-index: 2; justify-content: space-between; min-height: 68px; padding: 12px clamp(16px, 4vw, 54px); border-bottom: 1px solid #f0e2e8; background: rgba(255, 250, 252, 0.94); box-shadow: 0 5px 18px rgba(111, 65, 82, 0.06); backdrop-filter: blur(12px); }
+.account-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }.account-avatar { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: #d45d87; color: white; font-size: 14px; font-weight: 800; }.account-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; text-align: left; }.account-copy small { color: #aa939e; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.account-copy strong { max-width: min(42vw, 360px); overflow: hidden; color: #55464e; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.account-bar button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px solid #efd4df; border-radius: 10px; background: #fff; color: #a95877; font-size: 11px; font-weight: 800; box-shadow: 0 4px 10px rgba(111, 65, 82, 0.05); transition: .2s ease; }.account-bar button:hover { border-color: #d989a7; background: #fff0f5; color: #c44775; transform: translateY(-1px); }.account-bar button span { font-size: 16px; }
+@media (max-width: 600px) { .account-bar { gap: 10px; padding: 10px 14px; }.account-copy strong { max-width: 45vw; }.account-bar button { padding: 8px 10px; font-size: 10px; } }
+.account-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; min-height: 54px; height: 54px; box-sizing: border-box; padding-top: 8px; padding-bottom: 8px; }
+.authenticated-content { padding-top: 54px; }
+.account-actions { display: flex; align-items: center; gap: 8px; }
+.password-change-form { position: absolute; top: calc(100% + 10px); right: clamp(14px, 4vw, 54px); z-index: 101; display: grid; width: min(320px, calc(100vw - 28px)); gap: 10px; padding: 16px; border: 1px solid #efdce4; border-radius: 14px; background: #fff; box-shadow: 0 14px 30px rgba(111, 65, 82, .14); }
+.password-change-form strong { color: #55464e; font-size: 13px; }
+.password-change-form input { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #eadde2; border-radius: 9px; background: #fffdfd; color: #55464e; font: inherit; font-size: 12px; }
+.password-change-form input:focus { border-color: #d989a7; outline: 3px solid #fce4ed; }
+.password-change-error, .password-change-success { margin: 0; font-size: 11px; }
+.password-change-error { color: #b42318; }.password-change-success { color: #287a52; }
+.password-change-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.password-change-actions button { padding: 8px 11px; }
+.password-change-actions button:first-child { background: #d45d87; color: #fff; }
+.password-change-form:has(.password-change-success) input,
+.password-change-form:has(.password-change-success) .password-change-actions { display: none; }
+@media (max-width: 600px) { .account-actions { gap: 5px; }.account-actions button { padding: 7px 8px; font-size: 9px; }.password-change-form { right: 14px; } }
+.account-avatar { width: 30px; height: 30px; border-radius: 9px; font-size: 12px; }.account-copy { gap: 0; }.account-copy small { font-size: 8px; }.account-copy strong { font-size: 11px; }.account-bar button { padding: 7px 10px; font-size: 10px; }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import UserDataContext from './UserDataContext.js'
 const MIGRATION_MARKER = 'essentials-cloud-migration-v1'
-const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals']
+const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes']
 
 function readLocalData() {
   return LOCAL_KEYS.flatMap(key => {
@@ -17,7 +17,7 @@ function readLocalData() {
       throw new Error(`No se pudo leer el dato local "${key}". No se ha migrado ni borrado.`)
     }
 
-    if ((key === 'dailyTasks' || key === 'dailyReminders') && !Array.isArray(value)) {
+    if ((key === 'dailyTasks' || key === 'dailyReminders' || key === 'notes') && !Array.isArray(value)) {
       throw new Error(`El dato local "${key}" tiene un formato no válido. No se ha migrado ni borrado.`)
     }
     if (key === 'expenses' && !Array.isArray(value)) {

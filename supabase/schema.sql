@@ -1,6 +1,6 @@
 create table if not exists public.user_data (
   user_id uuid not null references auth.users (id) on delete cascade,
-  key text not null check (key in ('dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals')),
+  key text not null check (key in ('dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes')),
   value jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (user_id, key)
@@ -11,7 +11,7 @@ alter table public.user_data
 
 alter table public.user_data
   add constraint user_data_key_check
-  check (key in ('dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals'));
+  check (key in ('dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes'));
 
 alter table public.user_data enable row level security;
 
