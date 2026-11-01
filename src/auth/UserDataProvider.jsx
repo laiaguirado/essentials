@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import UserDataContext from './UserDataContext.js'
 const MIGRATION_MARKER = 'essentials-cloud-migration-v1'
-const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'expenses', 'expenseBudgets']
+const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets']
 
 function readLocalData() {
   return LOCAL_KEYS.flatMap(key => {
@@ -17,8 +17,8 @@ function readLocalData() {
       throw new Error(`No se pudo leer el dato local "${key}". No se ha migrado ni borrado.`)
     }
 
-    if (key === 'dailyTasks' && !Array.isArray(value)) {
-      throw new Error('Las tareas locales tienen un formato no válido. No se han migrado ni borrado.')
+    if ((key === 'dailyTasks' || key === 'dailyReminders') && !Array.isArray(value)) {
+      throw new Error(`El dato local "${key}" tiene un formato no válido. No se ha migrado ni borrado.`)
     }
     if (key === 'expenses' && !Array.isArray(value)) {
       throw new Error('Los gastos locales tienen un formato no válido. No se han migrado ni borrado.')
@@ -149,6 +149,11 @@ export function UserDataProvider({ userId, children }) {
       savedRecords.current = { ...savedRecords.current, [key]: value }
       setSaveError('')
     }).catch(error => {
+      if (key === 'dailyReminders' && error.code === '23514') {
+        setSaveError('Supabase aún no permite guardar recordatorios. Ejecuta supabase/add_daily_reminders.sql en el SQL Editor de Supabase y vuelve a intentar el guardado.')
+        return
+      }
+
       setSaveError(`No se pudieron guardar tus cambios (${key}): ${error.message}`)
     })
     saveQueues.current[key] = operation

@@ -55,55 +55,353 @@ body {
   margin: 0 5px;
 }
 
+.basic-container h2 {
+  margin: 0 0 1rem;
+}
+
+.quick-tools-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-tools-primary-row > button {
+  margin: 0;
+}
+
+.quick-tools-secondary-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  max-width: 1100px;
+  margin: 1rem auto 0;
+  gap: 10px;
+}
+
+.quick-tools-secondary-row .quick-tool,
+.quick-tools-secondary-row .random-picker-section {
+  width: 100%;
+  margin: 0;
+  min-width: 0;
+}
+
+.quick-tools-secondary-row .random-picker-toggle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 12px;
+  line-height: 1.2;
+}
+
+.quick-tools-secondary-row .quick-tool-content {
+  justify-items: stretch;
+}
+
+.quick-tools-secondary-row .quick-tool-content button {
+  justify-self: center;
+}
+
+.quick-tools-secondary-row .random-picker {
+  width: 100%;
+  margin: 12px auto 0;
+}
+
+@media (max-width: 640px) {
+  .quick-tools-secondary-row {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+  }
+}
+
+.random-picker-section {
+  margin-top: 1rem;
+}
+
+.random-picker {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 520px;
+  margin: 1.5rem auto 0;
+}
+
+.basic-container .random-picker-toggle {
+  margin: 0 5px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 5px;
+  background-color: #6f42c1;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.basic-container .random-picker-toggle:hover {
+  background-color: #59339d;
+}
+
+.quick-tool {
+  display: inline-block;
+  margin: 0 5px;
+  vertical-align: top;
+}
+
+.random-picker-section {
+  margin-top: 1rem;
+}
+
+.quick-tool-content {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-tool-content button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.random-number-button {
+  display: grid;
+  justify-items: center;
+  background-color: #ff9800;
+  color: white;
+}
+
+.random-number-button:hover {
+  background-color: #f57c00;
+}
+
+.random-number-range {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.coin-flip-button {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.coin-flip-button:hover {
+  background-color: #ffb300;
+}
+
+.dice-roll-button {
+  background-color: #20a486;
+  color: #fff;
+}
+
+.dice-roll-button:hover {
+  background-color: #17866d;
+}
+
+.dice-result {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.dice-icons {
+  display: flex;
+  gap: 8px;
+  color: #333;
+  font-size: 40px;
+  line-height: 1;
+}
+
+.quick-tool-result {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.coin-flip-count {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.random-picker label {
+  font-weight: 700;
+}
+
+.random-picker textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.random-picker button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 5px;
+  background-color: #6f42c1;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.random-picker button:hover {
+  background-color: #59339d;
+}
+
+.random-picker-result,
+.random-picker-error {
+  margin: 0;
+  font-weight: 700;
+}
+
+.random-picker-error {
+  color: #b42318;
+}
+
+.links-title {
+  margin: 2rem 0 1rem;
+}
+
 .sections-container {
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  justify-content: center;
-  margin: 2em 0;
+  flex-direction: column;
+  gap: 12px;
+  margin: 1em 0;
 }
 
 .basics-section,
 .media-section,
+.music-section,
 .programming-section,
 .rrss-section,
 .travels-section {
-  flex: 1 1 calc(33.333% - 14px);
-  min-width: 250px;
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   margin: 0;
-  padding: 1.5em;
+  padding: 1rem 1.5rem;
   border: 2px solid #ddd;
   border-radius: 8px;
   background-color: rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
 }
 
 .basics-section h2,
 .media-section h2,
+.music-section h2,
 .programming-section h2,
 .rrss-section h2,
 .travels-section h2 {
-  margin-bottom: 1em;
+  margin: 0;
   color: #333;
+  text-align: left;
 }
 
-.basics-buttons {
+.basics-buttons,
+.media-buttons,
+.music-buttons,
+.programming-buttons,
+.rrss-buttons,
+.travels-buttons {
   display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
 }
 
-.basics-buttons button {
+.sections-container button {
+  box-sizing: border-box;
+  flex: 0 0 148px;
+  width: 148px;
+  min-height: 54px;
+  margin: 0;
+  padding: 8px 12px;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
+  font-family: inherit;
   font-size: 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
   font-weight: bold;
+  white-space: nowrap;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.sections-container button:focus {
+  outline: none;
+}
+
+.sections-container button:focus-visible {
+  outline: 3px solid #333;
+  outline-offset: 3px;
+}
+
+.sections-container .skyscanner-btn {
+  flex-basis: 170px;
+  width: 170px;
+}
+
+.sections-container .youtube-music-btn {
+  flex-basis: 180px;
+  width: 180px;
+}
+
+.sections-container .amazon-music-btn {
+  flex-basis: 180px;
+  width: 180px;
+}
+
+.sections-container .amazon-video-btn {
+  flex-basis: 170px;
+  width: 170px;
 }
 
 .basics-buttons button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 640px) {
+  .basics-section,
+  .media-section,
+  .music-section,
+  .programming-section,
+  .rrss-section,
+  .travels-section {
+    grid-template-columns: 1fr;
+  }
+
+  .basics-section h2,
+  .media-section h2,
+  .music-section h2,
+  .programming-section h2,
+  .rrss-section h2,
+  .travels-section h2 {
+    text-align: center;
+  }
+
+  .basics-buttons,
+  .media-buttons,
+  .music-buttons,
+  .programming-buttons,
+  .rrss-buttons,
+  .travels-buttons {
+    justify-content: center;
+  }
 }
 
 .google-btn {
@@ -187,19 +485,58 @@ body {
   background-color: #772ce8;
 }
 
-.programming-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.amazon-video-btn {
+  background-color: #00a8e1;
+  color: white;
 }
 
-.programming-buttons button {
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  font-weight: bold;
+.amazon-video-btn:hover {
+  background-color: #0086b5;
+}
+
+.disney-plus-btn {
+  background-color: #090b2a;
+  color: white;
+}
+
+.disney-plus-btn:hover {
+  background-color: #171b55;
+}
+
+.hbo-btn {
+  background-color: #5822b4;
+  color: white;
+}
+
+.hbo-btn:hover {
+  background-color: #43178e;
+}
+
+.amazon-music-btn {
+  background-color: #25a8e0;
+  color: white;
+}
+
+.amazon-music-btn:hover {
+  background-color: #1787ba;
+}
+
+.youtube-music-btn {
+  background-color: #ff0033;
+  color: white;
+}
+
+.youtube-music-btn:hover {
+  background-color: #cc0029;
+}
+
+.spotify-btn {
+  background-color: #1db954;
+  color: white;
+}
+
+.spotify-btn:hover {
+  background-color: #169c46;
 }
 
 .programming-buttons button:hover {
@@ -225,6 +562,15 @@ body {
   background-color: #d5390c;
 }
 
+.notion-btn {
+  background-color: #000000;
+  color: white;
+}
+
+.notion-btn:hover {
+  background-color: #333333;
+}
+
 .stackoverflow-btn {
   background-color: #f48024;
   color: white;
@@ -234,20 +580,7 @@ body {
   background-color: #e37416;
 }
 
-.rrss-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 
-.rrss-buttons button {
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  font-weight: bold;
-}
 
 .rrss-buttons button:hover {
   transform: translateY(-2px);
@@ -263,20 +596,7 @@ body {
   background-color: #333333;
 }
 
-.travels-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 
-.travels-buttons button {
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  font-weight: bold;
-}
 
 .travels-buttons button:hover {
   transform: translateY(-2px);
@@ -321,4 +641,397 @@ body {
 
 .read-the-docs {
   color: #888;
+}
+
+.reminders-page {
+  min-height: 100vh;
+  padding: 2rem;
+  background: #f5f7fb;
+  color: #333;
+  text-align: left;
+}
+
+.reminders-container {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.reminders-back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #6c757d;
+  color: #fff;
+  font-weight: 700;
+}
+
+.reminders-page h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.reminders-intro {
+  margin: 8px 0 24px;
+  color: #5b6470;
+}
+
+.reminder-form {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.reminder-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.reminder-form input,
+.reminder-form select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #cbd2da;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.reminder-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reminder-form-row > label {
+  align-content: start;
+  min-width: 0;
+}
+
+.reminder-category-controls {
+  width: 100%;
+  min-width: 0;
+}
+
+.reminder-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reminder-form-actions button {
+  justify-self: start;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 7px;
+  background: #4285f4;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reminder-form-actions button[type="submit"] {
+  background: #4285f4;
+  color: #fff;
+}
+
+.reminder-form-actions button[type="submit"]:hover {
+  background: #357ae8;
+}
+
+.reminder-form-actions .reminder-cancel-edit {
+  border: 1px solid #cbd2da;
+  background: #fff;
+  color: #333;
+}
+
+.reminder-category-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.reminder-category-switch {
+  justify-self: start;
+  padding: 0 0 0 11px;
+  border: 0;
+  background: none;
+  color: #245eb5;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reminder-form-error {
+  margin: 0;
+  color: #a12626;
+}
+
+.reminders-list {
+  margin-top: 28px;
+}
+
+.reminders-list h2 {
+  margin-bottom: 12px;
+}
+
+.reminders-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reminders-list-header h2 {
+  margin: 0;
+}
+
+.reminders-list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.reminders-list-header label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5b6470;
+  font-size: 14px;
+}
+
+.reminders-list-header select {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid #cbd2da;
+  border-radius: 7px;
+  background: #fff;
+  color: #333;
+  font: inherit;
+}
+
+.reminders-list ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reminder-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.reminder-card-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminder-inline-edit {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.reminder-inline-edit label {
+  display: grid;
+  gap: 5px;
+  color: #5b6470;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reminder-inline-edit input,
+.reminder-inline-edit select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #cbd2da;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.reminder-inline-edit-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reminder-inline-category {
+  display: grid;
+  gap: 5px;
+}
+
+.reminder-inline-category button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #245eb5;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reminder-inline-edit .reminder-card-actions {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.reminder-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.reminder-task input {
+  width: 18px;
+  height: 18px;
+  accent-color: #4285f4;
+}
+
+.reminder-details {
+  display: flex;
+  grid-column: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: #626b75;
+  font-size: 14px;
+}
+
+.reminder-category {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e8f0fe;
+  color: #245eb5;
+}
+
+.reminder-card.is-completed .reminder-task span {
+  color: #6c757d;
+  text-decoration: line-through;
+}
+
+.reminder-delete {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d7a4a4;
+  border-radius: 6px;
+  background: #fff;
+  color: #a12626;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.reminder-edit {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #a9bfdc;
+  border-radius: 6px;
+  background: #fff;
+  color: #245eb5;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.reminder-edit:hover {
+  background: #f0f5ff;
+}
+
+.reminder-delete:hover {
+  background: #fff1f1;
+}
+
+.task-icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #a9bfdc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.task-icon-button:hover {
+  background: #f0f5ff;
+}
+
+.task-icon-button.task-icon-delete {
+  border-color: #d7a4a4;
+  background: #fff;
+}
+
+.task-icon-button.task-icon-delete:hover {
+  background: #fff1f1;
+}
+
+.reminders-empty {
+  padding: 18px;
+  border-radius: 8px;
+  background: #fff;
+  color: #626b75;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .reminders-page {
+    padding: 1rem;
+  }
+
+  .reminder-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .reminder-inline-edit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reminders-list-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .reminders-list-controls {
+    flex-direction: column;
+  }
 }

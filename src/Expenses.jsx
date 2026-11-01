@@ -13,6 +13,7 @@ function Expenses() {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
+  const [selectedSummaryCategories, setSelectedSummaryCategories] = useState([])
   const [showMonthlyBudget, setShowMonthlyBudget] = useState(false)
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [hoveredCategory, setHoveredCategory] = useState(null)
@@ -666,6 +667,11 @@ function Expenses() {
             const spent = budgetSpentByCategory[cat.id]
             const overLimit = limit > 0 && spent > limit
             const progress = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0
+            const progressColor = overLimit || progress >= 75
+              ? '#dc3545'
+              : progress >= 50
+                ? '#ffc107'
+                : '#28a745'
 
             return (
               <div key={cat.id} style={{ backgroundColor: 'white', padding: '14px', borderRadius: '8px', borderLeft: `4px solid ${overLimit ? '#dc3545' : cat.color}` }}>
@@ -710,14 +716,20 @@ function Expenses() {
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: '13px', color: overLimit ? '#dc3545' : '#6c757d', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px', fontSize: '13px' }}>
+                  <span style={{ color: '#6c757d' }}>Gastado</span>
+                  <strong style={{ color: overLimit ? '#dc3545' : '#333' }}>
+                    €{spent.toFixed(2)}
+                  </strong>
+                </div>
+                <div style={{ fontSize: '12px', color: overLimit ? '#dc3545' : '#6c757d', marginBottom: limit > 0 ? '8px' : 0 }}>
                   {limit > 0
-                    ? `Gastado: €${spent.toFixed(2)} de €${limit.toFixed(2)}${overLimit ? ` · Excedido €${(spent - limit).toFixed(2)}` : ''}`
-                    : `Gastado: €${spent.toFixed(2)} · Sin límite definido`}
+                    ? `de €${limit.toFixed(2)}${overLimit ? ` · Excedido €${(spent - limit).toFixed(2)}` : ''}`
+                    : 'Sin límite definido'}
                 </div>
                 {limit > 0 && (
                   <div style={{ height: '7px', backgroundColor: '#e9ecef', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${progress}%`, backgroundColor: overLimit ? '#dc3545' : cat.color }} />
+                    <div style={{ height: '100%', width: `${progress}%`, backgroundColor: progressColor, transition: 'width 0.3s ease, background-color 0.3s ease' }} />
                   </div>
                 )}
               </div>
@@ -754,18 +766,46 @@ function Expenses() {
           <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showCategorySummary ? '▲' : '▼'}</span>
         </button>
         <div id="category-summary-content" style={{ display: showCategorySummary ? 'grid' : 'none', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: '10px' }}>
+          <button
+            type="button"
+            onClick={event => {
+              event.stopPropagation()
+              setSelectedSummaryCategories(current => (
+                current.length === categories.length ? [] : categories.map(cat => cat.id)
+              ))
+            }}
+            style={{ gridColumn: '1 / -1', justifySelf: 'start', padding: '6px 10px', border: '1px solid #cbd2da', borderRadius: '6px', backgroundColor: '#fff', color: '#245eb5', cursor: 'pointer' }}
+          >
+            {selectedSummaryCategories.length === categories.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+          </button>
           {categories.map(cat => {
             const total = getCategoryTotal(cat.id)
+            const isSelected = selectedSummaryCategories.includes(cat.id)
             return (
-              <div
+              <button
+                type="button"
                 key={cat.id}
+                aria-pressed={isSelected}
+                aria-controls={isSelected ? `category-expenses-${cat.id}` : undefined}
+                onClick={event => {
+                  event.stopPropagation()
+                  setSelectedSummaryCategories(current => (
+                    isSelected
+                      ? current.filter(categoryId => categoryId !== cat.id)
+                      : [...current, cat.id]
+                  ))
+                }}
                 style={{
                   backgroundColor: 'white',
                   padding: '12px',
                   borderRadius: '8px',
                   borderLeft: `4px solid ${cat.color}`,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  font: 'inherit',
+                  cursor: 'pointer',
+                  outline: isSelected ? `2px solid ${cat.color}` : 'none',
+                  outlineOffset: '1px'
                 }}
               >
                 <div style={{ fontSize: '22px', marginBottom: '5px' }}>{cat.icon}</div>
@@ -773,6 +813,135 @@ function Expenses() {
                 <div style={{ fontSize: '18px', color: cat.color, fontWeight: 'bold' }}>
                   €{total}
                 </div>
+              </button>
+            )
+          })}
+          {selectedSummaryCategories.map(categoryId => {
+            const selectedCategory = categories.find(cat => cat.id === categoryId)
+            const categoryExpenses = filterExpensesByDate()
+              .filter(expense => expense.category === categoryId)
+              .sort((first, second) => {
+                const [firstDay, firstMonth, firstYear] = first.date.split('/')
+                const [secondDay, secondMonth, secondYear] = second.date.split('/')
+                return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
+                  new Date(`${firstYear}-${firstMonth}-${firstDay}`)
+              })
+
+            return (
+              <div
+                key={categoryId}
+                id={`category-expenses-${categoryId}`}
+                style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px', borderRadius: '8px', backgroundColor: '#f8f9fa' }}
+              >
+                <strong style={{ color: '#333', marginBottom: '4px' }}>
+                  {selectedCategory?.icon} {selectedCategory?.name}: gastos registrados
+                </strong>
+                {categoryExpenses.length === 0 ? (
+                  <span style={{ color: '#6c757d' }}>No hay gastos para esta categoría en el periodo seleccionado.</span>
+                ) : (
+                  categoryExpenses.map(expense => (
+                    <div
+                      key={expense.id}
+                      style={{
+                        backgroundColor: 'white',
+                        padding: '15px',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '15px',
+                        borderLeft: `5px solid ${selectedCategory?.color || '#6c757d'}`,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      {editingExpenseId === expense.id ? (
+                        <form onSubmit={saveInlineEdit} style={{ width: '100%' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                            <input
+                              aria-label="Descripción del gasto"
+                              type="text"
+                              value={editingValues.description}
+                              onChange={event => setEditingValues({ ...editingValues, description: event.target.value })}
+                              required
+                              style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+                            />
+                            <input
+                              aria-label="Cantidad en euros"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={editingValues.amount}
+                              onChange={event => setEditingValues({ ...editingValues, amount: event.target.value })}
+                              required
+                              style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+                            />
+                            <select
+                              aria-label="Categoría del gasto"
+                              value={editingValues.category}
+                              onChange={event => setEditingValues({ ...editingValues, category: event.target.value })}
+                              style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+                            >
+                              {categories.map(option => (
+                                <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
+                              ))}
+                            </select>
+                            <input
+                              aria-label="Fecha del gasto"
+                              type="date"
+                              value={editingValues.date}
+                              onChange={event => setEditingValues({ ...editingValues, date: event.target.value })}
+                              required
+                              style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button type="button" onClick={cancelInlineEdit} style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#6c757d', color: 'white', cursor: 'pointer' }}>
+                              Cancelar
+                            </button>
+                            <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
+                              💾 Guardar cambios
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', minWidth: 0 }}>
+                            <div style={{ fontSize: '28px' }}>{selectedCategory?.icon}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#333' }}>
+                                {expense.description}
+                              </div>
+                              <div style={{ color: '#6c757d', fontSize: '14px' }}>
+                                {selectedCategory?.name} • {expense.date}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ fontSize: '22px', fontWeight: 'bold', color: selectedCategory?.color || '#333' }}>
+                              €{expense.amount.toFixed(2)}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => editExpense(expense)}
+                              aria-label={`Editar gasto: ${expense.description}`}
+                              style={{ backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteExpense(expense.id)}
+                              aria-label={`Eliminar gasto: ${expense.description}`}
+                              style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             )
           })}

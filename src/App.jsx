@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Routes, Route, Link } from 'react-router-dom'
 import './App.css'
 import Tasks from './Tasks.jsx'
-import Habits from './Habits.jsx'
+import Reminders from './Reminders.jsx'
 import Expenses from './Expenses.jsx'
 
 function Home() {
@@ -11,6 +11,14 @@ function Home() {
   const [randomNumber, setRandomNumber] = useState(null)
   const [coinResult, setCoinResult] = useState('')
   const [flipCount, setFlipCount] = useState(0)
+  const [diceResult, setDiceResult] = useState(null)
+  const [isRandomNumberOpen, setIsRandomNumberOpen] = useState(false)
+  const [isCoinOpen, setIsCoinOpen] = useState(false)
+  const [isDiceOpen, setIsDiceOpen] = useState(false)
+  const [randomOptions, setRandomOptions] = useState('')
+  const [selectedOption, setSelectedOption] = useState('')
+  const [selectionError, setSelectionError] = useState('')
+  const [isRandomPickerOpen, setIsRandomPickerOpen] = useState(false)
 
   const colors = ['#ffffff', '#f0f0f0', '#ffebee', '#e8f5e8', '#e3f2fd', '#fff3e0', '#f3e5f5', '#fce4ec', '#ffeb3b', '#c8e6c9', '#ffccbc', '#d1c4e9']
   
@@ -29,17 +37,34 @@ function Home() {
   const generateRandomNumber = () => {
     const num = Math.floor(Math.random() * 100) + 1
     setRandomNumber(num)
-    // Clear coin result when generating random number
-    setCoinResult('')
-    setFlipCount(0)
   }
 
   const flipCoin = () => {
     const result = Math.random() < 0.5 ? 'Cara' : 'Cruz'
     setCoinResult(result)
-    setFlipCount(prev => prev + 1)
-    //Clear random number when flipping coin
-    setRandomNumber(null)
+    setFlipCount(previousCount => previousCount + 1)
+  }
+
+  const rollDice = () => {
+    const firstDie = Math.floor(Math.random() * 6) + 1
+    const secondDie = Math.floor(Math.random() * 6) + 1
+    setDiceResult([firstDie, secondDie])
+  }
+
+  const selectRandomOption = () => {
+    const options = randomOptions
+      .split(/[\n,]/)
+      .map(option => option.trim())
+      .filter(Boolean)
+
+    if (options.length === 0) {
+      setSelectedOption('')
+      setSelectionError('Añade opciones separadas por comas o en líneas distintas.')
+      return
+    }
+
+    setSelectionError('')
+    setSelectedOption(options[Math.floor(Math.random() * options.length)])
   }
 
   return (
@@ -47,7 +72,7 @@ function Home() {
       <h1>Essentials</h1>
       <div className="funcionalities-container">
         <Link to="/tasks" style={{ textDecoration: 'none' }}>
-          <button 
+          <button
             style={{ 
               padding: '8px 16px', 
               cursor: 'pointer', 
@@ -69,11 +94,11 @@ function Home() {
               e.target.style.boxShadow = 'none'
             }}
           >
-            📝 Daily Tasks
+            📝 Tareas diarias
           </button>
         </Link>
-        <Link to="/habits" style={{ textDecoration: 'none' }}>
-          <button 
+        <Link to="/reminders" style={{ textDecoration: 'none' }}>
+          <button
             style={{ 
               padding: '8px 16px', 
               cursor: 'pointer', 
@@ -95,7 +120,7 @@ function Home() {
               e.target.style.boxShadow = 'none'
             }}
           >
-          🎯 Habits
+          📅 Recordatorio
           </button>
         </Link>
         <Link to="/expenses" style={{ textDecoration: 'none' }}>
@@ -126,6 +151,8 @@ function Home() {
         </Link>
         </div>
         <div className="basic-container">
+        <h2>Quick tools</h2>
+        <div className="quick-tools-row quick-tools-primary-row">
         <button 
           onClick={() => setCount((count) => count + 1)}
           style={{ 
@@ -153,7 +180,6 @@ function Home() {
         <button
           onClick={changeBackgroundColor}
           style={{ 
-            marginLeft: '10px', 
             padding: '8px 16px', 
             cursor: 'pointer',
             transition: 'all 0.3s ease',
@@ -175,112 +201,164 @@ function Home() {
         >
           Cambiar color de fondo
         </button>
-        <button 
-          onClick={generateRandomNumber}
-          style={{ 
-            marginLeft: '10px', 
-            padding: '8px 16px', 
-            cursor: 'pointer', 
-            backgroundColor: '#ff9800', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '5px',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#f57c00'
-            e.target.style.transform = 'translateY(-2px)'
-            e.target.style.boxShadow = '0 4px 8px rgba(255,152,0,0.3)'
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#ff9800'
-            e.target.style.transform = 'translateY(0)'
-            e.target.style.boxShadow = 'none'
-          }}
-        >
-          🎲 Número Aleatorio
-        </button>
-        <button 
-          onClick={flipCoin}
-          style={{ 
-            marginLeft: '10px', 
-            padding: '8px 16px', 
-            cursor: 'pointer', 
-            backgroundColor: '#ffc107', 
-            color: '#333', 
-            border: 'none', 
-            borderRadius: '5px',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = '#ffb300'
-            e.target.style.transform = 'translateY(-2px)'
-            e.target.style.boxShadow = '0 4px 8px rgba(255,193,7,0.3)'
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = '#ffc107'
-            e.target.style.transform = 'translateY(0)'
-            e.target.style.boxShadow = 'none'
-          }}
-        >
-          🪙 Lanzar Moneda
-        </button>
+        </div>
+        <div className="quick-tools-row quick-tools-secondary-row">
+        <div className="quick-tool">
+          <button
+            type="button"
+            className="random-picker-toggle"
+            aria-expanded={isRandomNumberOpen}
+            aria-controls="random-number-tool"
+            onClick={() => setIsRandomNumberOpen(open => !open)}
+          >
+            {isRandomNumberOpen ? 'Ocultar número aleatorio' : 'Mostrar número aleatorio'}
+          </button>
+          {isRandomNumberOpen && (
+            <div className="quick-tool-content" id="random-number-tool">
+              <button
+                type="button"
+                onClick={generateRandomNumber}
+                className="random-number-button"
+              >
+                🎲 Generar número
+                <span className="random-number-range">(número del 1 al 100)</span>
+              </button>
+              {randomNumber && <p className="quick-tool-result" role="status">Número generado: {randomNumber}</p>}
+            </div>
+          )}
+        </div>
+        <div className="quick-tool">
+          <button
+            type="button"
+            className="random-picker-toggle"
+            aria-expanded={isCoinOpen}
+            aria-controls="coin-tool"
+            onClick={() => setIsCoinOpen(open => !open)}
+          >
+            {isCoinOpen ? 'Ocultar lanzamiento de moneda' : 'Mostrar lanzamiento de moneda'}
+          </button>
+          {isCoinOpen && (
+            <div className="quick-tool-content" id="coin-tool">
+              <button
+                type="button"
+                onClick={flipCoin}
+                className="coin-flip-button"
+              >
+                🪙 Lanzar moneda
+              </button>
+              {coinResult && (
+                <p className="quick-tool-result" role="status">
+                  Resultado: 🪙 {coinResult}
+                </p>
+              )}
+              {flipCount > 0 && <p className="coin-flip-count">Lanzamientos: {flipCount}</p>}
+            </div>
+          )}
+        </div>
+        <div className="quick-tool">
+          <button
+            type="button"
+            className="random-picker-toggle"
+            aria-expanded={isDiceOpen}
+            aria-controls="dice-tool"
+            onClick={() => setIsDiceOpen(open => !open)}
+          >
+            {isDiceOpen ? 'Ocultar lanzamiento de dados' : 'Mostrar lanzamiento de dados'}
+          </button>
+          {isDiceOpen && (
+            <div className="quick-tool-content" id="dice-tool">
+              <button
+                type="button"
+                onClick={rollDice}
+                className="dice-roll-button"
+              >
+                🎲 Lanzar dados
+              </button>
+              {diceResult && (
+                <div className="dice-result" role="status" aria-label={`Dados: ${diceResult[0]} y ${diceResult[1]}`}>
+                  <div className="dice-icons" aria-hidden="true">
+                    {diceResult.map((die, index) => (
+                      <span key={index}>{['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][die - 1]}</span>
+                    ))}
+                  </div>
+                  <p className="quick-tool-result">
+                    Resultado: {diceResult[0]} + {diceResult[1]} = {diceResult[0] + diceResult[1]}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="random-picker-section">
+          <button
+            type="button"
+            className="random-picker-toggle"
+            aria-expanded={isRandomPickerOpen}
+            aria-controls="random-picker"
+            onClick={() => setIsRandomPickerOpen(open => !open)}
+          >
+            {isRandomPickerOpen ? 'Ocultar selector aleatorio' : 'Mostrar selector aleatorio'}
+          </button>
+          {isRandomPickerOpen && (
+            <div className="random-picker" id="random-picker">
+              <label htmlFor="random-options">Selector aleatorio</label>
+              <textarea
+                id="random-options"
+                value={randomOptions}
+                onChange={event => {
+                  setRandomOptions(event.target.value)
+                  setSelectedOption('')
+                  setSelectionError('')
+                }}
+                placeholder="Escribe opciones separadas por comas o en líneas distintas"
+                rows={3}
+              />
+              <button type="button" onClick={selectRandomOption}>🎯 Elegir al azar</button>
+              {selectionError && <p className="random-picker-error" role="alert">{selectionError}</p>}
+              {selectedOption && <p className="random-picker-result" role="status">Resultado: {selectedOption}</p>}
+            </div>
+          )}
+        </div>
+        </div>
       </div>
       
-      {randomNumber && (
-        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '18px', fontWeight: 'bold' }}>
-          Número generado: {randomNumber}
-        </div>
-      )}
-      
-      {coinResult && (
-        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '18px', fontWeight: 'bold' }}>
-          🪙 Resultado: {coinResult}
-        </div>
-      )}
-      
-      {flipCount > 0 && (
-        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '16px', color: '#666' }}>
-          🪙 Lanzamientos: {flipCount}
-        </div>
-      )}
-      
+      <h2 className="links-title">Links</h2>
       <div className="sections-container">
         <div className="basics-section">
-          <h2>🌐 Basics</h2>
+          <h2>🌐 Basics Google</h2>
           <div className="basics-buttons">
             <button 
               onClick={() => window.open('https://www.google.com', '_blank')}
               className="google-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🔍 Google
             </button>
             <button 
               onClick={() => window.open('https://mail.google.com', '_blank')}
               className="gmail-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               📧 Gmail
             </button>
             <button 
               onClick={() => window.open('https://translate.google.com', '_blank')}
               className="translator-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🌍 Traductor
             </button>
             <button 
               onClick={() => window.open('https://drive.google.com', '_blank')}
               className="drive-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               📁 Drive
             </button>
             <button 
               onClick={() => window.open('https://photos.google.com', '_blank')}
               className="photos-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               📸 Fotos
             </button>
@@ -296,12 +374,10 @@ function Home() {
               style={{ 
                 padding: '10px 20px', 
                 cursor: 'pointer', 
-                margin: '5px',
                 transition: 'all 0.3s ease',
                 backgroundColor: '#ff0000',
                 color: 'white',
                 border: 'none',
-                borderRadius: '5px'
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = '#cc0000'
@@ -322,12 +398,10 @@ function Home() {
               style={{ 
                 padding: '10px 20px', 
                 cursor: 'pointer', 
-                margin: '5px',
                 transition: 'all 0.3s ease',
                 backgroundColor: '#000000',
                 color: '#ff0000',
                 border: 'none',
-                borderRadius: '5px'
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = '#333333'
@@ -342,50 +416,52 @@ function Home() {
             >
               🎬 Netflix
             </button>
-            <button 
-              onClick={() => window.open('https://www.twitch.tv', '_blank')}
-              className="twitch-btn"
-              style={{ 
-                padding: '10px 20px', 
-                cursor: 'pointer', 
-                margin: '5px',
-                transition: 'all 0.3s ease',
-                backgroundColor: '#9146ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#772ce8'
-                e.target.style.transform = 'translateY(-2px)'
-                e.target.style.boxShadow = '0 4px 8px rgba(145,70,255,0.3)'
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#9146ff'
-                e.target.style.transform = 'translateY(0)'
-                e.target.style.boxShadow = 'none'
-              }}
+            <button
+              onClick={() => window.open('https://www.primevideo.com', '_blank')}
+              className="amazon-video-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
-              🎮 Twitch
+              🎬 Amazon Video
+            </button>
+            <button
+              onClick={() => window.open('https://www.disneyplus.com', '_blank')}
+              className="disney-plus-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              ✨ Disney+
+            </button>
+            <button
+              onClick={() => window.open('https://www.max.com', '_blank')}
+              className="hbo-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              🎬 HBO
             </button>
           </div>
         </div>
-        <div className="programming-section">
-          <h2>💻 Programming</h2>
-          <div className="programming-buttons">
-            <button 
-              onClick={() => window.open('https://github.com', '_blank')}
-              className="github-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+        <div className="music-section">
+          <h2>🎵 Music</h2>
+          <div className="music-buttons">
+            <button
+              onClick={() => window.open('https://music.youtube.com', '_blank')}
+              className="youtube-music-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
-              🐙 GitHub
+              🎵 YouTube Music
             </button>
-            <button 
-              onClick={() => window.open('https://figma.com', '_blank')}
-              className="figma-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+            <button
+              onClick={() => window.open('https://open.spotify.com', '_blank')}
+              className="spotify-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
-              🎨 Figma
+              🟢 Spotify
+            </button>
+            <button
+              onClick={() => window.open('https://music.amazon.com', '_blank')}
+              className="amazon-music-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              🎵 Amazon Music
             </button>
           </div>
         </div>
@@ -395,16 +471,49 @@ function Home() {
             <button 
               onClick={() => window.open('https://www.instagram.com', '_blank')}
               className="instagram-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               📷 Instagram
             </button>
             <button 
               onClick={() => window.open('https://www.tiktok.com', '_blank')}
               className="tiktok-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🎵 TikTok
+            </button>
+            <button
+              onClick={() => window.open('https://www.twitch.tv', '_blank')}
+              className="twitch-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              🎮 Twitch
+            </button>
+          </div>
+        </div>
+        <div className="programming-section">
+          <h2>💻 Programming</h2>
+          <div className="programming-buttons">
+            <button
+              onClick={() => window.open('https://github.com', '_blank')}
+              className="github-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              🐙 GitHub
+            </button>
+            <button
+              onClick={() => window.open('https://figma.com', '_blank')}
+              className="figma-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              🎨 Figma
+            </button>
+            <button
+              onClick={() => window.open('https://www.notion.so', '_blank')}
+              className="notion-btn"
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
+            >
+              📝 Notion
             </button>
           </div>
         </div>
@@ -414,37 +523,34 @@ function Home() {
             <button 
               onClick={() => window.open('https://www.booking.com', '_blank')}
               className="booking-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🏨 Booking
             </button>
             <button 
               onClick={() => window.open('https://www.vueling.com', '_blank')}
               className="vueling-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               ✈️ Vueling
             </button>
             <button 
               onClick={() => window.open('https://www.ryanair.com', '_blank')}
               className="ryanair-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🛫 Ryanair
             </button>
             <button 
               onClick={() => window.open('https://www.skyscanner.com', '_blank')}
               className="skyscanner-btn"
-              style={{ padding: '10px 20px', cursor: 'pointer', margin: '5px' }}
+              style={{ padding: '10px 20px', cursor: 'pointer' }}
             >
               🔍 Skyscanner
             </button>
           </div>
         </div>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </div>
   )
 }
@@ -454,7 +560,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/tasks" element={<Tasks />} />
-      <Route path="/habits" element={<Habits />} />
+      <Route path="/reminders" element={<Reminders />} />
       <Route path="/expenses" element={<Expenses />} />
     </Routes>
   )
