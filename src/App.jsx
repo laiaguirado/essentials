@@ -146,7 +146,7 @@ function Home() {
               e.target.style.boxShadow = 'none'
             }}
           >
-          💰 Control de Gastos
+          💰 Control de las finanzas
           </button>
         </Link>
         </div>

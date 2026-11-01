@@ -8,8 +8,8 @@ planning, reminders, and personal budgeting quick and accessible.
 
 - **Daily tasks:** create, complete, and organize a personal to-do list.
 - **Reminders:** schedule tasks by date and assign each one a category.
-- **Expense tracking:** record and review expenses, organize them by category,
-  and set monthly category budgets.
+- **Financial tracking:** record income and expenses, review the balance and
+  transaction history, and set monthly budgets for expenses by category.
 - **Quick tools:** generate a random number, flip a coin, and change the
   dashboard background.
 - **Reference links:** browse useful resources grouped into topics such as
