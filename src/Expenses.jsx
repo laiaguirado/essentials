@@ -18,6 +18,9 @@ function Expenses() {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
+  const [showCategoryReportPreview, setShowCategoryReportPreview] = useState(false)
+  const [isGeneratingCategoryReport, setIsGeneratingCategoryReport] = useState(false)
+  const [categoryReportError, setCategoryReportError] = useState('')
   const [selectedSummaryCategories, setSelectedSummaryCategories] = useState([])
   const [showMonthlyBudget, setShowMonthlyBudget] = useState(false)
   const [selectedBudgetCategory, setSelectedBudgetCategory] = useState('all')
@@ -34,6 +37,7 @@ function Expenses() {
   const initialBudgetMonth = useRef(budgetMonth)
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null)
   const [budgetDraft, setBudgetDraft] = useState('')
+  const categoryReportPreviewRef = useRef(null)
 
   const categories = [
     { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
@@ -169,6 +173,86 @@ function Expenses() {
           : expense.type !== 'income')
       ))
       .reduce((total, expense) => total + expense.amount, 0)
+  }
+
+  const categoryReportRows = allCategories.map(cat => ({
+    ...cat,
+    total: getCategoryTotal(cat.id),
+    isIncome: incomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
+  }))
+  const categoryReportDetails = selectedSummaryCategories
+    .map(categoryId => {
+      const selectedCategory = allCategories.find(cat => cat.id === categoryId)
+      if (!selectedCategory) return null
+
+      const isIncome = incomeCategories.some(cat => cat.id === categoryId)
+      const movements = filterExpensesByDate()
+        .filter(expense => (
+          expense.category === categoryId &&
+          (isIncome ? expense.type === 'income' : expense.type !== 'income')
+        ))
+        .sort((first, second) => {
+          const [firstDay, firstMonth, firstYear] = first.date.split('/')
+          const [secondDay, secondMonth, secondYear] = second.date.split('/')
+          return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
+            new Date(`${firstYear}-${firstMonth}-${firstDay}`)
+        })
+
+      return { category: selectedCategory, isIncome, movements }
+    })
+    .filter(Boolean)
+  const categoryReportExpenses = getTotal()
+  const categoryReportIncome = getIncomeTotal()
+  const categoryReportBalance = categoryReportIncome - categoryReportExpenses
+  const categoryReportPeriod = [
+    filterMonth ? filterMonth.charAt(0).toUpperCase() + filterMonth.slice(1) : null,
+    filterYear || null
+  ].filter(Boolean).join(' ') || 'Todos los periodos'
+
+  const downloadCategoryReport = async () => {
+    setIsGeneratingCategoryReport(true)
+    setCategoryReportError('')
+    try {
+      const { jsPDF } = await import('jspdf')
+      const { default: html2canvas } = await import('html2canvas')
+      if (!categoryReportPreviewRef.current) {
+        throw new Error('No se encontró la vista previa para generar el PDF.')
+      }
+
+      const canvas = await html2canvas(categoryReportPreviewRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff'
+      })
+      const pdf = new jsPDF()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const pageMargin = 10
+      const imageWidth = pdf.internal.pageSize.getWidth() - pageMargin * 2
+      const imageHeight = canvas.height * imageWidth / canvas.width
+      const pageContentHeight = pageHeight - pageMargin * 2
+      const pixelsPerPage = Math.floor(canvas.height * pageContentHeight / imageHeight)
+      let sourceY = 0
+
+      while (sourceY < canvas.height) {
+        const sliceHeight = Math.min(pixelsPerPage, canvas.height - sourceY)
+        const pageCanvas = document.createElement('canvas')
+        pageCanvas.width = canvas.width
+        pageCanvas.height = sliceHeight
+        const pageContext = pageCanvas.getContext('2d')
+        if (!pageContext) throw new Error('No se pudo preparar una página del PDF.')
+        pageContext.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight)
+        const sliceImageHeight = sliceHeight * imageWidth / canvas.width
+        if (sourceY > 0) pdf.addPage()
+        pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', pageMargin, pageMargin, imageWidth, sliceImageHeight)
+        sourceY += sliceHeight
+      }
+
+      pdf.save(`resumen-categorias-${filterYear || 'todos'}-${filterMonth || 'meses'}.pdf`)
+    } catch (error) {
+      console.error('No se pudo generar el resumen PDF por categorías.', error)
+      setCategoryReportError('No se pudo generar el PDF. Inténtalo de nuevo.')
+    } finally {
+      setIsGeneratingCategoryReport(false)
+    }
   }
 
   const startEditingBudget = (categoryId) => {
@@ -366,7 +450,7 @@ function Expenses() {
         </Link>
       </div>
       <h1 style={{ color: '#333', marginBottom: '20px', textAlign: 'center' }}>
-        💰 Control de las finanzas
+          💰 Control de las finanzas
       </h1>
 
       {/* Global Month Filter */}
@@ -1207,16 +1291,28 @@ function Expenses() {
           if (!showCategorySummary) setShowCategorySummary(true)
         }}
       >
-        <button
-          type="button"
-          aria-expanded={showCategorySummary}
-          aria-controls="category-summary-content"
-          onClick={() => setShowCategorySummary(open => !open)}
-          style={{ width: '100%', padding: 0, border: 'none', background: 'none', color: '#495057', fontSize: '18px', fontWeight: 'bold', textAlign: 'center', cursor: 'pointer', position: 'relative', marginBottom: showCategorySummary ? '12px' : 0 }}
-        >
-          📈 Resumen por Categorías
-          <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showCategorySummary ? '▲' : '▼'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: showCategorySummary ? '12px' : 0 }}>
+          <button
+            type="button"
+            aria-expanded={showCategorySummary}
+            aria-controls="category-summary-content"
+            onClick={() => setShowCategorySummary(open => !open)}
+            style={{ flex: 1, padding: 0, border: 'none', background: 'none', color: '#495057', fontSize: '18px', fontWeight: 'bold', textAlign: 'center', cursor: 'pointer', position: 'relative' }}
+          >
+            📈 Resumen por Categorías
+            <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showCategorySummary ? '▲' : '▼'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={event => {
+              event.stopPropagation()
+              setShowCategoryReportPreview(true)
+            }}
+            style={{ flexShrink: 0, padding: '8px 12px', border: 'none', borderRadius: '7px', backgroundColor: '#245eb5', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            📄 PDF
+          </button>
+        </div>
         <div id="category-summary-content" style={{ display: showCategorySummary ? 'grid' : 'none', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
           <button
             type="button"
@@ -1453,7 +1549,7 @@ function Expenses() {
             No hay movimientos registrados. ¡Añade tu primer movimiento!
           </p>
         ) : (
-          <div>
+          <div style={{ textAlign: 'left' }}>
             {Object.entries(getExpensesByMonth()).map(([month, monthExpenses]) => (
               <div key={month} style={{ marginBottom: '30px' }}>
                 <h3 style={{ 
@@ -1600,6 +1696,134 @@ function Expenses() {
         )}
         </div>
       </div>
+
+      {showCategoryReportPreview && (
+        <div
+          role="presentation"
+          onClick={() => setShowCategoryReportPreview(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '20px'
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-report-preview-title"
+            onClick={event => event.stopPropagation()}
+            style={{
+              width: 'min(760px, 100%)',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              backgroundColor: '#eef0f2',
+              borderRadius: '12px',
+              padding: '20px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h2 id="category-report-preview-title" style={{ margin: 0, color: '#333', fontSize: '20px', textAlign: 'left' }}>Vista previa del PDF</h2>
+                <p style={{ margin: '5px 0 0', color: '#6c757d', fontSize: '13px' }}>
+                  Se muestra el detalle de los gastos o ingresos de cada categoría seleccionada.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar vista previa"
+                onClick={() => setShowCategoryReportPreview(false)}
+                style={{ border: 'none', background: 'transparent', fontSize: '24px', cursor: 'pointer', color: '#495057' }}
+              >
+                ×
+              </button>
+            </div>
+            <div ref={categoryReportPreviewRef} style={{ backgroundColor: 'white', padding: 'clamp(18px, 5vw, 42px)', margin: '0 auto 16px', maxWidth: '595px', minHeight: '500px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', boxSizing: 'border-box', textAlign: 'left' }}>
+              <h2 style={{ margin: '0 0 6px', color: '#333', fontSize: '22px' }}>Control de las finanzas</h2>
+              <h3 style={{ margin: '0 0 4px', color: '#495057', fontSize: '17px' }}>Resumen por categorías</h3>
+              <p style={{ margin: '0 0 20px', color: '#6c757d', fontSize: '13px' }}>Periodo: {categoryReportPeriod}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', marginBottom: '20px' }}>
+                <div style={{ padding: '10px', backgroundColor: '#fff4f4', borderRadius: '6px', color: '#b42318' }}>
+                  <div style={{ fontSize: '12px' }}>Gastos</div>
+                  <strong>{formatCurrency(categoryReportExpenses)}</strong>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#effaf2', borderRadius: '6px', color: '#18743a' }}>
+                  <div style={{ fontSize: '12px' }}>Ingresos</div>
+                  <strong>{formatCurrency(categoryReportIncome)}</strong>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#eef5ff', borderRadius: '6px', color: '#245eb5' }}>
+                  <div style={{ fontSize: '12px' }}>Balance</div>
+                  <strong>{categoryReportBalance < 0 ? '−' : ''}{formatCurrency(Math.abs(categoryReportBalance))}</strong>
+                </div>
+              </div>
+              <div style={{ borderBottom: '1px solid #dee2e6', paddingBottom: '8px', marginBottom: '4px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '12px', fontWeight: 'bold', color: '#495057', fontSize: '13px', textAlign: 'left' }}>
+                <span>Categoría y detalle seleccionado</span>
+                <span>Fecha</span>
+                <span>Importe</span>
+              </div>
+              {categoryReportRows.map(row => (
+                <div key={row.id} style={{ borderBottom: '1px solid #dee2e6', padding: '8px 0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '12px', alignItems: 'center' }}>
+                    <span style={{ color: '#333', fontSize: '14px' }}>{row.icon} {row.name}</span>
+                    <span />
+                    <strong style={{ color: row.total === 0 ? '#6c757d' : row.isIncome ? '#18743a' : '#b42318', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                      {row.total === 0 ? '' : row.isIncome ? '+' : '−'}{formatCurrency(row.total)}
+                    </strong>
+                  </div>
+                  {categoryReportDetails
+                    .filter(detail => detail.category.id === row.id)
+                    .map(({ category: selectedCategory, isIncome, movements }) => (
+                      <div key={selectedCategory.id} style={{ margin: '8px 0 0 14px', paddingLeft: '12px', borderLeft: `3px solid ${selectedCategory.color}`, backgroundColor: '#f8f9fa' }}>
+                        {movements.length === 0 ? (
+                          <p style={{ margin: 0, padding: '7px 8px', color: '#6c757d', fontSize: '12px' }}>
+                            Sin movimientos en el periodo seleccionado.
+                          </p>
+                        ) : (
+                          movements.map(movement => (
+                            <div key={movement.id} style={{ borderBottom: '1px solid #e9ecef', padding: '7px 8px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '10px', alignItems: 'center' }}>
+                              <div style={{ minWidth: 0, color: '#333', fontSize: '13px', overflowWrap: 'anywhere' }}>{movement.description}</div>
+                              <span style={{ color: '#6c757d', fontSize: '11px', whiteSpace: 'nowrap' }}>{movement.date}</span>
+                              <strong style={{ color: isIncome ? '#18743a' : '#b42318', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                {isIncome ? '+' : '−'}{formatCurrency(movement.amount)}
+                              </strong>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    ))}
+                </div>
+              ))}
+            </div>
+            {categoryReportError && (
+              <p role="alert" style={{ margin: '0 0 12px', color: '#b42318', textAlign: 'right' }}>
+                {categoryReportError}
+              </p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowCategoryReportPreview(false)}
+                style={{ padding: '10px 14px', border: '1px solid #cbd2da', borderRadius: '7px', backgroundColor: 'white', color: '#495057', cursor: 'pointer' }}
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={downloadCategoryReport}
+                disabled={isGeneratingCategoryReport}
+                style={{ padding: '10px 14px', border: 'none', borderRadius: '7px', backgroundColor: '#245eb5', color: 'white', fontWeight: 'bold', cursor: isGeneratingCategoryReport ? 'wait' : 'pointer', opacity: isGeneratingCategoryReport ? 0.7 : 1 }}
+              >
+                {isGeneratingCategoryReport ? 'Generando PDF…' : '⬇ Descargar PDF'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
     </div>
   )
