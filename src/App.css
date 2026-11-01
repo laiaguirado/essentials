@@ -9,14 +9,71 @@ body {
 }
 
 #root {
-  max-width: 1280px;
+  max-width: 1440px;
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
   text-align: center;
   min-height: 100vh;
   color: var(--text-color);
+}
+
+.home-page {
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 40px);
+  box-sizing: border-box;
+}
+
+.home-page > h1 {
+  margin: 0 0 24px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.15;
+}
+
+.quick-tools-primary-row > button {
+  min-height: 46px;
+  flex: 1 1 220px;
+}
+
+.finance-page {
+  width: 100%;
+  text-align: left;
+}
+
+.finance-distribution-grid > div {
+  min-width: 0;
+}
+
+.finance-summary-cards > div {
+  min-width: 0;
+}
+
+.finance-movement-card {
+  min-width: 0;
+}
+
+.tasks-page {
+  min-height: 100vh;
+  padding: 2rem;
+  background: #f5f7fb;
+}
+
+.tasks-container {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.tasks-container h1 {
+  margin: 0 0 20px;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+}
+
+.tasks-container input,
+.tasks-container button {
+  min-height: 44px;
 }
 
 .card {
@@ -24,31 +81,44 @@ body {
 }
 
 .funcionalities-container {
-  display: block;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   text-align: center;
   margin-bottom: 1rem;
-  padding: 1rem;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  border: 1px solid #ddd;
+  padding: 16px;
+  gap: 12px;
+  background-color: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e7ee;
+  box-shadow: 0 4px 18px rgba(29, 48, 73, 0.06);
   width: 100%;
   box-sizing: border-box;
 }
 
+.funcionalities-container > a {
+  min-width: 0;
+}
+
 .funcionalities-container button {
-  margin: 0 5px;
+  width: 100%;
+  min-height: 48px;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  font: inherit;
+  font-weight: 700;
 }
 
 .basic-container {
   display: block;
   text-align: center;
-  padding: 1rem;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  border: 1px solid #ddd;
+  padding: clamp(16px, 2.5vw, 28px);
+  background-color: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e7ee;
   width: 100%;
   box-sizing: border-box;
   margin-top: 1rem;
+  box-shadow: 0 4px 18px rgba(29, 48, 73, 0.06);
 }
 
 .basic-container button {
@@ -116,22 +186,6 @@ body {
   box-sizing: border-box;
   border-left: 1px solid #d1d5db;
   padding-left: 20px;
-}
-
-@media (max-width: 660px) {
-  .finance-income-distribution {
-    border-left: 0;
-    border-top: 1px solid #d1d5db;
-    padding-top: 20px;
-    padding-left: 0;
-  }
-}
-
-@media (max-width: 640px) {
-  .quick-tools-secondary-row {
-    grid-template-columns: 1fr;
-    max-width: 400px;
-  }
 }
 
 .random-picker-section {
@@ -1048,5 +1102,130 @@ body {
 
   .reminders-list-controls {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 900px) {
+  .quick-tools-secondary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 660px) {
+  .finance-income-distribution {
+    border-left: 0;
+    border-top: 1px solid #d1d5db;
+    padding-top: 20px;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  #root {
+    padding: 0;
+  }
+
+  .home-page {
+    padding: 12px;
+  }
+
+  .home-page > h1 {
+    margin-bottom: 16px;
+  }
+
+  .funcionalities-container {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .basic-container {
+    margin-top: 12px;
+    padding: 16px 12px;
+  }
+
+  .quick-tools-secondary-row {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+  }
+
+  .links-title {
+    margin: 1.5rem 0 0.75rem;
+  }
+
+  .basics-section,
+  .media-section,
+  .music-section,
+  .programming-section,
+  .rrss-section,
+  .travels-section {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .basics-section h2,
+  .media-section h2,
+  .music-section h2,
+  .programming-section h2,
+  .rrss-section h2,
+  .travels-section h2 {
+    text-align: center;
+  }
+
+  .basics-buttons,
+  .media-buttons,
+  .music-buttons,
+  .programming-buttons,
+  .rrss-buttons,
+  .travels-buttons {
+    justify-content: flex-start;
+  }
+
+  .finance-page {
+    padding: 12px !important;
+  }
+
+  .finance-page > h1 {
+    margin: 14px 0 18px !important;
+    font-size: clamp(1.65rem, 7vw, 2.2rem) !important;
+    line-height: 1.2;
+  }
+
+  .finance-movement-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .finance-movement-card > div {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .tasks-page {
+    padding: 16px !important;
+  }
+
+  .tasks-container > div:first-child {
+    margin-bottom: 12px !important;
+  }
+
+  .tasks-container > div:first-child a {
+    max-width: 100%;
+    font-size: 14px;
+  }
+
+  .tasks-container > div:nth-of-type(2) > div {
+    flex-wrap: wrap;
+  }
+
+  .tasks-container > div:nth-of-type(2) input {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .reminders-page {
+    padding: 16px;
   }
 }

@@ -102,3 +102,28 @@
   color: #663c00;
   text-align: center;
 }
+
+@media (max-width: 600px) {
+  .auth-page {
+    padding: 16px;
+  }
+
+  .auth-card {
+    padding: 24px 20px;
+  }
+
+  .account-bar {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+  }
+
+  .account-bar span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .save-warning {
+    padding: 10px 14px;
+  }
+}

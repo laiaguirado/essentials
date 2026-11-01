@@ -617,7 +617,7 @@ function Expenses() {
   }
 
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
+    <div className="finance-page" style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
       <div style={{ textAlign: 'left', marginBottom: '15px' }}>
         <Link
           to="/"
@@ -841,7 +841,7 @@ function Expenses() {
         </section>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+      <div className="finance-summary-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '20px' }}>
         <div style={{ backgroundColor: '#fff4f4', color: '#b42318', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: '15px' }}>💸 Gastos</div>
           <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px' }}>{formatCurrency(getTotal())}</strong>
@@ -1086,6 +1086,7 @@ function Expenses() {
                 selectedDistributionDetails.expenses.map(expense => (
                   <div
                     key={expense.id}
+                    className="finance-movement-card"
                     style={{
                       backgroundColor: 'white',
                       padding: '15px',
@@ -1458,6 +1459,7 @@ function Expenses() {
               selectedBudgetMovements.map(expense => (
                 <div
                   key={expense.id}
+                  className="finance-movement-card"
                   style={{
                     backgroundColor: 'white',
                     padding: '15px',
@@ -1827,6 +1829,7 @@ function Expenses() {
                   categoryExpenses.map(expense => (
                     <div
                       key={expense.id}
+                      className="finance-movement-card"
                       style={{
                         backgroundColor: 'white',
                         padding: '15px',
@@ -2017,6 +2020,7 @@ function Expenses() {
                     return (
                       <div
                         key={expense.id}
+                        className="finance-movement-card"
                         style={{
                           backgroundColor: 'white',
                           padding: '15px',

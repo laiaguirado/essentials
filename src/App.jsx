@@ -68,7 +68,7 @@ function Home() {
   }
 
   return (
-    <div style={{ backgroundColor: bgColor, minHeight: '100vh', transition: 'background-color 0.3s ease' }}>
+    <div className="home-page" style={{ backgroundColor: bgColor, minHeight: '100vh', transition: 'background-color 0.3s ease' }}>
       <h1>Essentials</h1>
       <div className="funcionalities-container">
         <Link to="/tasks" style={{ textDecoration: 'none' }}>

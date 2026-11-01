@@ -62,8 +62,8 @@ function Tasks() {
   const completedTasks = tasks.filter(task => task.completed)
 
   return (
-    <div style={{ minHeight: '100vh', padding: '2rem', backgroundColor: '#f5f5f5' }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+    <div className="tasks-page" style={{ minHeight: '100vh', padding: '2rem', backgroundColor: '#f5f5f5' }}>
+      <div className="tasks-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
         <div style={{ textAlign: 'left', marginBottom: '15px' }}>
           <Link
             to="/"
