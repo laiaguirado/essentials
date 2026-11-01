@@ -9,7 +9,8 @@ planning, reminders, and personal budgeting quick and accessible.
 - **Daily tasks:** create, complete, and organize a personal to-do list.
 - **Reminders:** schedule tasks by date and assign each one a category.
 - **Financial tracking:** record income and expenses, review the balance and
-  transaction history, and set monthly budgets for expenses by category.
+  transaction history, set monthly budgets, create recurring movements and
+  savings goals, and filter the history.
 - **Quick tools:** generate a random number, flip a coin, and change the
   dashboard background.
 - **Reference links:** browse useful resources grouped into topics such as
@@ -21,3 +22,6 @@ planning, reminders, and personal budgeting quick and accessible.
 The frontend is built with React and Vite. Supabase provides authentication
 and cloud data storage; GitHub Actions builds and deploys the site to GitHub
 Pages.
+
+Existing Supabase projects must run `supabase/add_finance_features.sql` in the
+SQL Editor before saving recurring movements or savings goals.

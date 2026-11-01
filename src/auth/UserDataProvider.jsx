@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import UserDataContext from './UserDataContext.js'
 const MIGRATION_MARKER = 'essentials-cloud-migration-v1'
-const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets']
+const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals']
 
 function readLocalData() {
   return LOCAL_KEYS.flatMap(key => {
@@ -22,6 +22,9 @@ function readLocalData() {
     }
     if (key === 'expenses' && !Array.isArray(value)) {
       throw new Error('Los gastos locales tienen un formato no válido. No se han migrado ni borrado.')
+    }
+    if ((key === 'recurringMovements' || key === 'savingsGoals') && !Array.isArray(value)) {
+      throw new Error(`El dato local "${key}" tiene un formato no válido. No se ha migrado ni borrado.`)
     }
     if ((key === 'dailyHabits' || key === 'expenseBudgets') &&
         (value === null || typeof value !== 'object' || Array.isArray(value))) {
@@ -151,6 +154,10 @@ export function UserDataProvider({ userId, children }) {
     }).catch(error => {
       if (key === 'dailyReminders' && error.code === '23514') {
         setSaveError('Supabase aún no permite guardar recordatorios. Ejecuta supabase/add_daily_reminders.sql en el SQL Editor de Supabase y vuelve a intentar el guardado.')
+        return
+      }
+      if ((key === 'recurringMovements' || key === 'savingsGoals') && error.code === '23514') {
+        setSaveError('Supabase aún no permite guardar recurrencias u objetivos de ahorro. Ejecuta supabase/add_finance_features.sql en el SQL Editor de Supabase y vuelve a intentar el guardado.')
         return
       }
 

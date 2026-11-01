@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useUserData } from './auth/useUserData.js'
 
@@ -6,13 +6,48 @@ function formatCurrency(amount) {
   return `${Number(amount).toFixed(2)} €`
 }
 
+function parseLocalDate(dateString) {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function addRecurrenceInterval(dateString, frequency, preferredDay = parseLocalDate(dateString).getDate()) {
+  const date = parseLocalDate(dateString)
+  if (frequency === 'weekly') {
+    date.setDate(date.getDate() + 7)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+
+  date.setDate(1)
+  date.setMonth(date.getMonth() + 1)
+  const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  date.setDate(Math.min(preferredDay, lastDayOfMonth))
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 function Expenses() {
   const [expenses, setExpenses] = useUserData('expenses', [])
+  const [recurringMovements, setRecurringMovements] = useUserData('recurringMovements', [])
+  const [savingsGoals, setSavingsGoals] = useUserData('savingsGoals', [])
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('general')
   const [movementType, setMovementType] = useState('expense')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState('monthly')
+  const [goalName, setGoalName] = useState('')
+  const [goalTarget, setGoalTarget] = useState('')
+  const [goalSaved, setGoalSaved] = useState('')
+  const [goalContributions, setGoalContributions] = useState({})
+  const [goalActionErrors, setGoalActionErrors] = useState({})
+  const [editingSavingsGoalId, setEditingSavingsGoalId] = useState(null)
+  const [savingsGoalDraft, setSavingsGoalDraft] = useState({ name: '', target: '' })
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyCategory, setHistoryCategory] = useState('all')
+  const [historyType, setHistoryType] = useState('all')
+  const [historyFromDate, setHistoryFromDate] = useState('')
+  const [historyToDate, setHistoryToDate] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -23,6 +58,7 @@ function Expenses() {
   const [categoryReportError, setCategoryReportError] = useState('')
   const [selectedSummaryCategories, setSelectedSummaryCategories] = useState([])
   const [showMonthlyBudget, setShowMonthlyBudget] = useState(false)
+  const [showSavingsGoals, setShowSavingsGoals] = useState(false)
   const [selectedBudgetCategory, setSelectedBudgetCategory] = useState('all')
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [hoveredCategory, setHoveredCategory] = useState(null)
@@ -38,6 +74,45 @@ function Expenses() {
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null)
   const [budgetDraft, setBudgetDraft] = useState('')
   const categoryReportPreviewRef = useRef(null)
+  const processedRecurringOccurrences = useRef(new Set())
+
+  useEffect(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const generatedMovements = []
+    let hasUpdatedSchedule = false
+    const updatedRecurringMovements = recurringMovements.map(template => {
+      let nextDate = template.nextDate
+      let occurrences = 0
+      while (parseLocalDate(nextDate) <= today && occurrences < 240) {
+        const occurrenceId = `${template.id}-${nextDate}`
+        if (!processedRecurringOccurrences.current.has(occurrenceId)) {
+          processedRecurringOccurrences.current.add(occurrenceId)
+          generatedMovements.push({
+            id: occurrenceId,
+            description: template.description,
+            amount: template.amount,
+            category: template.category,
+            type: template.type,
+            date: parseLocalDate(nextDate).toLocaleDateString('es-ES'),
+            recurringId: template.id
+          })
+        }
+        nextDate = addRecurrenceInterval(nextDate, template.frequency, template.dayOfMonth)
+        occurrences += 1
+      }
+      if (nextDate !== template.nextDate) hasUpdatedSchedule = true
+      return nextDate === template.nextDate ? template : { ...template, nextDate }
+    })
+
+    if (generatedMovements.length > 0) {
+      setExpenses(currentExpenses => {
+        const existingIds = new Set(currentExpenses.map(expense => expense.id))
+        return [...currentExpenses, ...generatedMovements.filter(expense => !existingIds.has(expense.id))]
+      })
+    }
+    if (hasUpdatedSchedule) setRecurringMovements(updatedRecurringMovements)
+  }, [recurringMovements, setExpenses, setRecurringMovements])
 
   const categories = [
     { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
@@ -80,6 +155,8 @@ function Expenses() {
     setCategory('general')
     setMovementType('expense')
     setDate(new Date().toISOString().split('T')[0])
+    setIsRecurring(false)
+    setRecurrenceFrequency('monthly')
     setShowQuickAdd(false)
   }
 
@@ -97,6 +174,19 @@ function Expenses() {
     }
 
     setExpenses(currentExpenses => [...currentExpenses, newExpense])
+    if (isRecurring) {
+      const recurringId = `recurring-${Date.now()}`
+      setRecurringMovements(current => [...current, {
+        id: recurringId,
+        description,
+        amount: Number.parseFloat(amount),
+        category,
+        type: movementType,
+        frequency: recurrenceFrequency,
+        dayOfMonth: parseLocalDate(date).getDate(),
+        nextDate: addRecurrenceInterval(date, recurrenceFrequency)
+      }])
+    }
     resetExpenseForm()
   }
 
@@ -110,6 +200,14 @@ function Expenses() {
       date: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
     })
     setEditingExpenseId(expense.id)
+  }
+
+  const updateEditingMovementType = (type) => {
+    setEditingValues(current => current && ({
+      ...current,
+      type,
+      category: type === 'income' ? incomeCategories[0].id : categories[0].id
+    }))
   }
 
   const saveInlineEdit = (e) => {
@@ -132,6 +230,69 @@ function Expenses() {
   const cancelInlineEdit = () => {
     setEditingExpenseId(null)
     setEditingValues(null)
+  }
+
+  const saveSavingsGoal = (event) => {
+    event.preventDefault()
+    const target = Number(goalTarget)
+    const saved = Number(goalSaved || 0)
+    if (!goalName.trim() || !Number.isFinite(target) || target <= 0 || !Number.isFinite(saved) || saved < 0) return
+
+    setSavingsGoals(current => [...current, {
+      id: `goal-${Date.now()}`,
+      name: goalName.trim(),
+      target,
+      saved
+    }])
+    setGoalName('')
+    setGoalTarget('')
+    setGoalSaved('')
+  }
+
+  const addSavingsContribution = (goalId) => {
+    const contribution = Number(goalContributions[goalId])
+    if (!Number.isFinite(contribution) || contribution <= 0) return
+
+    setSavingsGoals(current => current.map(goal => (
+      goal.id === goalId ? { ...goal, saved: Number(goal.saved) + contribution } : goal
+    )))
+    setGoalActionErrors(current => ({ ...current, [goalId]: '' }))
+    setGoalContributions(current => ({ ...current, [goalId]: '' }))
+  }
+
+  const withdrawSavingsContribution = (goal) => {
+    const contribution = Number(goalContributions[goal.id])
+    if (!Number.isFinite(contribution) || contribution <= 0) return
+    if (contribution > Number(goal.saved)) {
+      setGoalActionErrors(current => ({ ...current, [goal.id]: 'No puedes retirar más dinero del que has ahorrado.' }))
+      return
+    }
+
+    setSavingsGoals(current => current.map(item => (
+      item.id === goal.id ? { ...item, saved: Number(item.saved) - contribution } : item
+    )))
+    setGoalActionErrors(current => ({ ...current, [goal.id]: '' }))
+    setGoalContributions(current => ({ ...current, [goal.id]: '' }))
+  }
+
+  const startEditingSavingsGoal = (goal) => {
+    setEditingSavingsGoalId(goal.id)
+    setSavingsGoalDraft({ name: goal.name, target: String(goal.target) })
+  }
+
+  const saveEditedSavingsGoal = (goalId) => {
+    const name = savingsGoalDraft.name.trim()
+    const target = Number(savingsGoalDraft.target)
+    if (!name || !Number.isFinite(target) || target <= 0) {
+      setGoalActionErrors(current => ({ ...current, [goalId]: 'Introduce un nombre y una meta válida.' }))
+      return
+    }
+
+    setSavingsGoals(current => current.map(goal => (
+      goal.id === goalId ? { ...goal, name, target } : goal
+    )))
+    setGoalActionErrors(current => ({ ...current, [goalId]: '' }))
+    setEditingSavingsGoalId(null)
   }
 
   const deleteExpense = (id) => {
@@ -326,13 +487,20 @@ function Expenses() {
     ? Math.max(Number(effectiveCategoryBudgets[budgetCategory.id]) || 0, 0)
     : totalBudgetAllowed
   const displayedBudgetProgress = displayedBudgetAllowed > 0
-    ? Math.min((displayedBudgetSpent / displayedBudgetAllowed) * 100, 100)
+    ? (displayedBudgetSpent / displayedBudgetAllowed) * 100
     : displayedBudgetSpent > 0 ? 100 : 0
   const displayedBudgetExceeded = displayedBudgetSpent > displayedBudgetAllowed
+  const displayedBudgetProgressColor = displayedBudgetProgress > 100
+    ? '#dc3545'
+    : displayedBudgetProgress >= 75
+      ? '#fd7e14'
+      : displayedBudgetProgress >= 50
+        ? '#ffc107'
+        : '#28a745'
 
   const getExpensesByMonth = () => {
     const months = {}
-    const filteredExpenses = filterExpensesByDate()
+    const filteredExpenses = filterHistoryExpenses()
     
     filteredExpenses.forEach(expense => {
       const dateParts = expense.date.split('/')
@@ -344,6 +512,23 @@ function Expenses() {
       months[monthKey].push(expense)
     })
     return months
+  }
+
+  const filterHistoryExpenses = () => {
+    const search = historySearch.trim().toLocaleLowerCase('es-ES')
+    return filterExpensesByDate().filter(expense => {
+      const categoryMatches = historyCategory === 'all' || expense.category === historyCategory
+      const typeMatches = historyType === 'all' ||
+        (historyType === 'income' ? expense.type === 'income' : expense.type !== 'income')
+      const [day, month, year] = expense.date.split('/')
+      const expenseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+      const fromMatches = !historyFromDate || expenseDate >= historyFromDate
+      const toMatches = !historyToDate || expenseDate <= historyToDate
+      const categoryName = allCategories.find(item => item.id === expense.category)?.name || ''
+      const searchMatches = !search ||
+        `${expense.description} ${categoryName}`.toLocaleLowerCase('es-ES').includes(search)
+      return categoryMatches && typeMatches && fromMatches && toMatches && searchMatches
+    })
   }
 
   const getAvailableMonthsForYear = (year) => {
@@ -603,6 +788,23 @@ function Expenses() {
                 />
               </div>
 
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#495057' }}>
+                  <input type="checkbox" checked={isRecurring} onChange={event => setIsRecurring(event.target.checked)} />
+                  Repetir movimiento
+                </label>
+                {isRecurring && (
+                  <select
+                    aria-label="Frecuencia del movimiento"
+                    value={recurrenceFrequency}
+                    onChange={event => setRecurrenceFrequency(event.target.value)}
+                    style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                  >
+                    <option value="monthly">Cada mes</option>
+                    <option value="weekly">Cada semana</option>
+                  </select>
+                )}
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
                   {movementType === 'income' ? '💰 Añadir ingreso' : '💸 Añadir gasto'}
@@ -612,6 +814,32 @@ function Expenses() {
           </div>
         )}
       </div>
+
+      {recurringMovements.length > 0 && (
+        <section style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '10px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
+          <h2 style={{ margin: '0 0 12px', color: '#495057', fontSize: '18px' }}>🔁 Movimientos recurrentes</h2>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {recurringMovements.map(template => {
+              const templateCategory = allCategories.find(item => item.id === template.category)
+              return (
+                <div key={template.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '7px', borderLeft: `4px solid ${templateCategory?.color || '#6c757d'}` }}>
+                  <span style={{ color: '#333' }}>
+                    {templateCategory?.icon} {template.description} · {formatCurrency(template.amount)} · {template.frequency === 'weekly' ? 'Semanal' : 'Mensual'} · Próximo: {parseLocalDate(template.nextDate).toLocaleDateString('es-ES')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRecurringMovements(current => current.filter(item => item.id !== template.id))}
+                    aria-label={`Eliminar recurrencia: ${template.description}`}
+                    style={{ border: 'none', borderRadius: '6px', padding: '6px 9px', backgroundColor: '#dc3545', color: 'white', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '20px' }}>
         <div style={{ backgroundColor: '#fff4f4', color: '#b42318', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
@@ -654,7 +882,7 @@ function Expenses() {
           <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showCategoryDistribution ? '▲' : '▼'}</span>
         </button>
         <div id="category-distribution-content" style={{ display: showCategoryDistribution ? 'flex' : 'none', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+          <div className="finance-distribution-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', minWidth: 0 }}>
           <h3 style={{ margin: 0, color: '#495057', fontSize: '16px' }}>Gastos por categoría</h3>
           {/* Pie Chart */}
@@ -752,7 +980,7 @@ function Expenses() {
             })}
           </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', minWidth: 0 }}>
+          <div className="finance-income-distribution" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', minWidth: 0 }}>
             <h3 style={{ margin: 0, color: '#495057', fontSize: '16px' }}>Ingresos por categoría</h3>
             <div style={{
               width: '250px',
@@ -873,6 +1101,15 @@ function Expenses() {
                     {editingExpenseId === expense.id ? (
                       <form onSubmit={saveInlineEdit} style={{ width: '100%' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                          <select
+                            aria-label="Tipo de movimiento"
+                            value={editingValues.type || 'expense'}
+                            onChange={event => updateEditingMovementType(event.target.value)}
+                            style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                          >
+                            <option value="expense">💸 Gasto</option>
+                            <option value="income">💰 Ingreso</option>
+                          </select>
                           <input
                             aria-label="Descripción del movimiento"
                             type="text"
@@ -881,6 +1118,16 @@ function Expenses() {
                             required
                             style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                           />
+                          <select
+                            aria-label="Categoría del movimiento"
+                            value={editingValues.category}
+                            onChange={event => setEditingValues(current => ({ ...current, category: event.target.value }))}
+                            style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                          >
+                            {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                              <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
+                            ))}
+                          </select>
                           <input
                             aria-label="Importe en euros"
                             type="number"
@@ -900,12 +1147,12 @@ function Expenses() {
                             style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                           />
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button type="button" onClick={cancelInlineEdit} style={{ padding: '8px 12px', border: '1px solid #ced4da', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                          <button type="button" onClick={cancelInlineEdit} style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#6c757d', color: 'white', cursor: 'pointer' }}>
                             Cancelar
                           </button>
-                          <button type="submit" style={{ padding: '8px 12px', border: 'none', borderRadius: '6px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
-                            Guardar
+                          <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
+                            💾 Guardar cambios
                           </button>
                         </div>
                       </form>
@@ -928,7 +1175,7 @@ function Expenses() {
                             type="button"
                             onClick={() => editExpense(expense)}
                             aria-label={`Editar movimiento: ${expense.description}`}
-                            style={{ backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
+                            style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
                           >
                             ✏️
                           </button>
@@ -1011,6 +1258,24 @@ function Expenses() {
         </div>
 
         <div id="monthly-budget-content" style={{ display: showMonthlyBudget ? 'block' : 'none' }}>
+        {budgetCategory && displayedBudgetAllowed > 0 && displayedBudgetProgress > 75 && (
+          <div
+            role="status"
+            style={{
+              padding: '10px 12px',
+              marginBottom: '12px',
+              borderRadius: '7px',
+              backgroundColor: displayedBudgetExceeded ? '#fff0f0' : '#fff8e1',
+              color: displayedBudgetExceeded ? '#b42318' : '#8a6100',
+              fontWeight: 'bold',
+              fontSize: '13px'
+            }}
+          >
+            {displayedBudgetExceeded
+              ? `⚠️ Presupuesto excedido por ${formatCurrency(displayedBudgetSpent - displayedBudgetAllowed)}.`
+              : `⚠️ Has utilizado el ${Math.round(displayedBudgetProgress)}% del presupuesto de ${budgetCategory.name}.`}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '18px' }}>
           <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
             <div style={{ color: '#6c757d', fontSize: '14px' }}>Gastado</div>
@@ -1040,15 +1305,15 @@ function Expenses() {
           <div
             role="progressbar"
             aria-label="Porcentaje del presupuesto mensual gastado"
-            aria-valuenow={Math.round(displayedBudgetProgress)}
+            aria-valuenow={Math.min(Math.round(displayedBudgetProgress), 100)}
             aria-valuemin="0"
             aria-valuemax="100"
             style={{ height: '12px', backgroundColor: '#e9ecef', borderRadius: '6px', overflow: 'hidden', marginBottom: '20px' }}
           >
             <div style={{
               height: '100%',
-              width: `${displayedBudgetProgress}%`,
-              backgroundColor: displayedBudgetExceeded ? '#dc3545' : '#007bff',
+              width: `${Math.min(displayedBudgetProgress, 100)}%`,
+              backgroundColor: displayedBudgetProgressColor,
               transition: 'width 0.3s ease'
             }} />
           </div>
@@ -1066,10 +1331,12 @@ function Expenses() {
             const limit = Number(savedLimit) || 0
             const spent = budgetSpentByCategory[cat.id]
             const overLimit = limit > 0 && spent > limit
-            const progress = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0
-            const progressColor = overLimit || progress >= 75
+            const progress = limit > 0 ? (spent / limit) * 100 : 0
+            const progressColor = progress > 100
               ? '#dc3545'
-              : progress >= 50
+              : progress >= 75
+                ? '#fd7e14'
+                : progress >= 50
                 ? '#ffc107'
                 : '#28a745'
 
@@ -1153,11 +1420,16 @@ function Expenses() {
                       </strong>
                     </div>
                     <div style={{ height: '7px', backgroundColor: '#e9ecef', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${progress}%`, backgroundColor: progressColor, transition: 'width 0.3s ease, background-color 0.3s ease' }} />
+                      <div style={{ height: '100%', width: `${Math.min(progress, 100)}%`, backgroundColor: progressColor, transition: 'width 0.3s ease, background-color 0.3s ease' }} />
                     </div>
                     {overLimit && (
                       <strong style={{ display: 'block', color: '#dc3545', fontSize: '12px', marginTop: '5px' }}>
                         Excedido {formatCurrency(spent - limit)}
+                      </strong>
+                    )}
+                    {!overLimit && progress > 75 && (
+                      <strong style={{ display: 'block', color: '#8a6100', fontSize: '12px', marginTop: '5px' }}>
+                        ⚠️ Has utilizado el {Math.round(progress)}% del límite.
                       </strong>
                     )}
                   </>
@@ -1201,7 +1473,16 @@ function Expenses() {
                   {editingExpenseId === expense.id ? (
                     <form onSubmit={saveInlineEdit} style={{ width: '100%' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-                        <input
+                      <select
+                        aria-label="Tipo de movimiento"
+                        value={editingValues.type || 'expense'}
+                        onChange={event => updateEditingMovementType(event.target.value)}
+                        style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                      >
+                        <option value="expense">💸 Gasto</option>
+                        <option value="income">💰 Ingreso</option>
+                      </select>
+                      <input
                           aria-label="Descripción del gasto"
                           type="text"
                           value={editingValues.description}
@@ -1209,6 +1490,16 @@ function Expenses() {
                           required
                           style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                         />
+                        <select
+                          aria-label="Categoría del movimiento"
+                          value={editingValues.category}
+                          onChange={event => setEditingValues(current => ({ ...current, category: event.target.value }))}
+                          style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+                        >
+                          {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                            <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
+                          ))}
+                        </select>
                         <input
                           aria-label="Importe del gasto en euros"
                           type="number"
@@ -1228,12 +1519,12 @@ function Expenses() {
                           style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                         />
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={cancelInlineEdit} style={{ padding: '8px 12px', border: '1px solid #ced4da', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={cancelInlineEdit} style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#6c757d', color: 'white', cursor: 'pointer' }}>
                           Cancelar
                         </button>
-                        <button type="submit" style={{ padding: '8px 12px', border: 'none', borderRadius: '6px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
-                          Guardar
+                        <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
+                          💾 Guardar cambios
                         </button>
                       </div>
                     </form>
@@ -1252,7 +1543,7 @@ function Expenses() {
                           type="button"
                           onClick={() => editExpense(expense)}
                           aria-label={`Editar gasto: ${expense.description}`}
-                          style={{ backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
+                          style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
                         >
                           ✏️
                         </button>
@@ -1272,6 +1563,145 @@ function Expenses() {
             )}
           </div>
         )}
+        </div>
+      </section>
+
+      <section style={{ backgroundColor: '#f8f9fa', padding: showSavingsGoals ? '18px' : '15px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
+        <button
+          type="button"
+          aria-expanded={showSavingsGoals}
+          aria-controls="savings-goals-content"
+          onClick={() => setShowSavingsGoals(open => !open)}
+          style={{ width: '100%', padding: 0, border: 'none', background: 'none', color: '#495057', fontSize: '18px', fontWeight: 'bold', textAlign: 'center', cursor: 'pointer', position: 'relative' }}
+        >
+          🎯 Objetivos de ahorro
+          <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showSavingsGoals ? '▲' : '▼'}</span>
+        </button>
+        <div id="savings-goals-content" style={{ display: showSavingsGoals ? 'block' : 'none', marginTop: '16px' }}>
+          <form onSubmit={saveSavingsGoal} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: savingsGoals.length ? '16px' : 0 }}>
+            <input
+              aria-label="Nombre del objetivo de ahorro"
+              type="text"
+              value={goalName}
+              onChange={event => setGoalName(event.target.value)}
+              placeholder="Nombre del objetivo"
+              required
+              style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            />
+            <input
+              aria-label="Importe objetivo en euros"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={goalTarget}
+              onChange={event => setGoalTarget(event.target.value)}
+              placeholder="Meta (€)"
+              required
+              style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            />
+            <input
+              aria-label="Ahorro actual en euros"
+              type="number"
+              min="0"
+              step="0.01"
+              value={goalSaved}
+              onChange={event => setGoalSaved(event.target.value)}
+              placeholder="Ahorrado (€)"
+              style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
+            />
+            <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '7px', backgroundColor: '#245eb5', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+              Añadir objetivo
+            </button>
+          </form>
+          {savingsGoals.length === 0 ? (
+            <p style={{ margin: 0, color: '#6c757d', fontSize: '13px' }}>Crea un objetivo para seguir tu progreso de ahorro.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+              {savingsGoals.map(goal => {
+                const progress = Math.min((Number(goal.saved) / Number(goal.target)) * 100, 100)
+                const isEditing = editingSavingsGoalId === goal.id
+                return (
+                  <div key={goal.id} style={{ padding: '12px', backgroundColor: 'white', borderRadius: '8px', borderLeft: '4px solid #36a2eb' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+                        {isEditing ? (
+                          <input
+                            aria-label={`Nombre del objetivo ${goal.name}`}
+                            type="text"
+                            value={savingsGoalDraft.name}
+                            onChange={event => setSavingsGoalDraft(current => ({ ...current, name: event.target.value }))}
+                            required
+                            style={{ minWidth: 0, flex: 1, padding: '5px', border: '1px solid #ddd', borderRadius: '5px', fontWeight: 'bold' }}
+                          />
+                        ) : (
+                          <strong style={{ color: '#333' }}>{goal.name}</strong>
+                        )}
+                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                          {isEditing ? (
+                            <>
+                              <button type="button" onClick={() => saveEditedSavingsGoal(goal.id)} aria-label={`Guardar cambios de ${goal.name}`} style={{ border: 'none', borderRadius: '5px', padding: '4px 7px', backgroundColor: '#e8f5e9', color: '#18743a', cursor: 'pointer' }}>✓</button>
+                              <button type="button" aria-label="Cancelar edición" onClick={() => setEditingSavingsGoalId(null)} style={{ border: 'none', borderRadius: '5px', padding: '4px 7px', backgroundColor: '#f1f3f5', color: '#495057', cursor: 'pointer' }}>×</button>
+                            </>
+                          ) : (
+                            <>
+                              <button type="button" onClick={() => startEditingSavingsGoal(goal)} aria-label={`Editar objetivo ${goal.name}`} style={{ border: 'none', borderRadius: '5px', padding: '4px 7px', backgroundColor: '#e9ecef', cursor: 'pointer' }}>✏️</button>
+                              <button
+                                type="button"
+                                aria-label={`Eliminar objetivo ${goal.name}`}
+                                onClick={() => setSavingsGoals(current => current.filter(item => item.id !== goal.id))}
+                                style={{ border: 'none', borderRadius: '5px', padding: '4px 7px', backgroundColor: '#dc3545', color: 'white', cursor: 'pointer' }}
+                              >
+                                🗑️
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', margin: '8px 0', color: '#6c757d', fontSize: '13px' }}>
+                        <span>{formatCurrency(goal.saved)} ahorrados</span>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                          Meta:
+                          {isEditing ? (
+                            <input
+                              aria-label={`Importe meta de ${goal.name}`}
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={savingsGoalDraft.target}
+                              onChange={event => setSavingsGoalDraft(current => ({ ...current, target: event.target.value }))}
+                              required
+                              style={{ width: '90px', padding: '4px', border: '1px solid #ddd', borderRadius: '5px' }}
+                            />
+                          ) : (
+                            <span>{formatCurrency(goal.target)}</span>
+                          )}
+                        </label>
+                      </div>
+                      <div style={{ height: '8px', backgroundColor: '#e9ecef', borderRadius: '5px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${progress}%`, backgroundColor: progress >= 100 ? '#28a745' : '#36a2eb', transition: 'width 0.2s ease' }} />
+                      </div>
+                      {progress >= 100 && <strong style={{ display: 'block', marginTop: '8px', color: '#18743a', fontSize: '12px' }}>¡Objetivo alcanzado!</strong>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      <input
+                        aria-label={`Cantidad para aportar o retirar de ${goal.name}`}
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={goalContributions[goal.id] ?? ''}
+                        onChange={event => setGoalContributions(current => ({ ...current, [goal.id]: event.target.value }))}
+                        placeholder="Cantidad (€)"
+                        style={{ minWidth: 0, flex: 1, padding: '7px', border: '1px solid #ddd', borderRadius: '6px' }}
+                      />
+                      <button type="button" onClick={() => addSavingsContribution(goal.id)} disabled={!goalContributions[goal.id] || Number(goalContributions[goal.id]) <= 0} style={{ padding: '7px 10px', border: 'none', borderRadius: '6px', backgroundColor: '#18743a', color: 'white', cursor: 'pointer', whiteSpace: 'nowrap' }}>Aportar</button>
+                      <button type="button" onClick={() => withdrawSavingsContribution(goal)} disabled={!goalContributions[goal.id] || Number(goalContributions[goal.id]) <= 0} style={{ padding: '7px 10px', border: 'none', borderRadius: '6px', backgroundColor: '#dc3545', color: 'white', cursor: 'pointer', whiteSpace: 'nowrap' }}>Retirar</button>
+                    </div>
+                    {goalActionErrors[goal.id] && <p role="alert" style={{ margin: '6px 0 0', color: '#b42318', fontSize: '12px' }}>{goalActionErrors[goal.id]}</p>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -1415,18 +1845,11 @@ function Expenses() {
                             <select
                               aria-label="Tipo de movimiento"
                               value={editingValues.type || 'expense'}
-                              onChange={event => {
-                                const nextType = event.target.value
-                                setEditingValues({
-                                  ...editingValues,
-                                  type: nextType,
-                                  category: nextType === 'income' ? incomeCategories[0].id : categories[0].id
-                                })
-                              }}
+                              onChange={event => updateEditingMovementType(event.target.value)}
                               style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
                             >
-                              <option value="expense">Gasto</option>
-                              <option value="income">Ingreso</option>
+                              <option value="expense">💸 Gasto</option>
+                              <option value="income">💰 Ingreso</option>
                             </select>
                             <input
                               aria-label="Descripción del movimiento"
@@ -1495,7 +1918,7 @@ function Expenses() {
                               type="button"
                               onClick={() => editExpense(expense)}
                               aria-label={`Editar gasto: ${expense.description}`}
-                              style={{ backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                              style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
                             >
                               ✏️
                             </button>
@@ -1544,9 +1967,36 @@ function Expenses() {
           <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showExpenseHistory ? '▲' : '▼'}</span>
         </button>
         <div id="expense-history-content" style={{ display: showExpenseHistory ? 'block' : 'none' }}>
-        {expenses.length === 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '18px' }}>
+          <input
+            aria-label="Buscar movimientos"
+            type="search"
+            value={historySearch}
+            onChange={event => setHistorySearch(event.target.value)}
+            placeholder="Buscar descripción o categoría"
+            style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}
+          />
+          <select aria-label="Filtrar historial por tipo" value={historyType} onChange={event => setHistoryType(event.target.value)} style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="all">Todos los tipos</option>
+            <option value="expense">Gastos</option>
+            <option value="income">Ingresos</option>
+          </select>
+          <select aria-label="Filtrar historial por categoría" value={historyCategory} onChange={event => setHistoryCategory(event.target.value)} style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="all">Todas las categorías</option>
+            {allCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#495057', fontSize: '13px' }}>
+            Desde
+            <input aria-label="Fecha inicial del historial" type="date" value={historyFromDate} onChange={event => setHistoryFromDate(event.target.value)} style={{ minWidth: 0, width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#495057', fontSize: '13px' }}>
+            Hasta
+            <input aria-label="Fecha final del historial" type="date" value={historyToDate} onChange={event => setHistoryToDate(event.target.value)} style={{ minWidth: 0, width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+          </label>
+        </div>
+        {filterHistoryExpenses().length === 0 ? (
           <p style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>
-            No hay movimientos registrados. ¡Añade tu primer movimiento!
+            {expenses.length === 0 ? 'No hay movimientos registrados. ¡Añade tu primer movimiento!' : 'No hay movimientos que coincidan con los filtros seleccionados.'}
           </p>
         ) : (
           <div style={{ textAlign: 'left' }}>
@@ -1593,18 +2043,11 @@ function Expenses() {
                               <select
                                 aria-label="Tipo de movimiento"
                                 value={editingValues.type || 'expense'}
-                                onChange={event => {
-                                  const nextType = event.target.value
-                                  setEditingValues({
-                                    ...editingValues,
-                                    type: nextType,
-                                    category: nextType === 'income' ? incomeCategories[0].id : categories[0].id
-                                  })
-                                }}
+                                onChange={event => updateEditingMovementType(event.target.value)}
                                 style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
                               >
-                                <option value="expense">Gasto</option>
-                                <option value="income">Ingreso</option>
+                                <option value="expense">💸 Gasto</option>
+                                <option value="income">💰 Ingreso</option>
                               </select>
                               <input
                                 aria-label="Descripción del movimiento"
@@ -1672,7 +2115,7 @@ function Expenses() {
                               <button
                                 onClick={() => editExpense(expense)}
                                 aria-label={`Editar gasto: ${expense.description}`}
-                                style={{ backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                                style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
                               >
                                 ✏️
                               </button>

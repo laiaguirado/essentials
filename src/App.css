@@ -112,6 +112,21 @@ body {
   margin: 12px auto 0;
 }
 
+.finance-income-distribution {
+  box-sizing: border-box;
+  border-left: 1px solid #d1d5db;
+  padding-left: 20px;
+}
+
+@media (max-width: 660px) {
+  .finance-income-distribution {
+    border-left: 0;
+    border-top: 1px solid #d1d5db;
+    padding-top: 20px;
+    padding-left: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .quick-tools-secondary-row {
     grid-template-columns: 1fr;
