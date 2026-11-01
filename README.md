@@ -22,6 +22,3 @@ planning, reminders, and personal budgeting quick and accessible.
 The frontend is built with React and Vite. Supabase provides authentication
 and cloud data storage; GitHub Actions builds and deploys the site to GitHub
 Pages.
-
-Existing Supabase projects must run `supabase/add_finance_features.sql` in the
-SQL Editor before saving recurring movements or savings goals.
