@@ -1,9 +1,39 @@
-import { useEffect, useState, useRef } from 'react'
+import { Fragment, useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useUserData } from './auth/useUserData.js'
 
 function formatCurrency(amount) {
   return `${Number(amount).toFixed(2)} €`
+}
+
+function compareMovementDatesAscending(first, second) {
+  const [firstDay, firstMonth, firstYear] = first.date.split('/')
+  const [secondDay, secondMonth, secondYear] = second.date.split('/')
+  return Date.UTC(Number(firstYear), Number(firstMonth) - 1, Number(firstDay)) -
+    Date.UTC(Number(secondYear), Number(secondMonth) - 1, Number(secondDay))
+}
+
+const PDF_CAPTURE_SCALE = 2
+const PDF_PAGE_CONTENT_HEIGHT_RATIO = 277 / 190
+
+function getPdfPageEnds(totalHeight, pageHeight, candidatePageBreaks) {
+  const pageEnds = []
+  let pageStart = 0
+
+  while (pageStart < totalHeight) {
+    const pageLimit = Math.min(pageStart + pageHeight, totalHeight)
+    const pageBreak = candidatePageBreaks
+      .filter(({ position }) => position > pageStart && position <= pageLimit)
+      .pop()
+    const pageEnd = pageLimit === totalHeight || pageBreak === undefined
+      ? { position: pageLimit }
+      : { position: pageBreak.position, breakId: pageBreak.id }
+
+    pageEnds.push(pageEnd)
+    pageStart = pageEnd.position
+  }
+
+  return pageEnds
 }
 
 function parseLocalDate(dateString) {
@@ -54,6 +84,7 @@ function Expenses() {
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
   const [showCategoryReportPreview, setShowCategoryReportPreview] = useState(false)
+  const [categoryReportPageBreaks, setCategoryReportPageBreaks] = useState([])
   const [isGeneratingCategoryReport, setIsGeneratingCategoryReport] = useState(false)
   const [categoryReportError, setCategoryReportError] = useState('')
   const [selectedSummaryCategories, setSelectedSummaryCategories] = useState([])
@@ -123,7 +154,8 @@ function Expenses() {
     { id: 'entretenimiento', name: 'Entretenimiento', color: '#ff9f40', brightColor: '#ffb366', icon: '🎮' },
     { id: 'compras', name: 'Compras', color: '#4bc0c0', brightColor: '#6dd4d4', icon: '🛍️' },
     { id: 'salud', name: 'Salud', color: '#9966ff', brightColor: '#b385ff', icon: '💊' },
-    { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' }
+    { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' },
+    { id: 'seguros', name: 'Seguros', color: '#20a39e', brightColor: '#40c4b5', icon: '🛡️' }
   ]
   const incomeCategories = [
     { id: 'salary', name: 'Salario', color: '#28a745', brightColor: '#52c76f', icon: '💼' },
@@ -352,12 +384,7 @@ function Expenses() {
           expense.category === categoryId &&
           (isIncome ? expense.type === 'income' : expense.type !== 'income')
         ))
-        .sort((first, second) => {
-          const [firstDay, firstMonth, firstYear] = first.date.split('/')
-          const [secondDay, secondMonth, secondYear] = second.date.split('/')
-          return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
-            new Date(`${firstYear}-${firstMonth}-${firstDay}`)
-        })
+        .sort(compareMovementDatesAscending)
 
       return { category: selectedCategory, isIncome, movements }
     })
@@ -370,6 +397,80 @@ function Expenses() {
     filterYear || null
   ].filter(Boolean).join(' ') || 'Todos los periodos'
 
+  useEffect(() => {
+    if (!showCategoryReportPreview) {
+      setCategoryReportPageBreaks([])
+      return
+    }
+
+    const preview = categoryReportPreviewRef.current
+    if (!preview) return
+
+    const updatePageBreaks = () => {
+      const bounds = preview.getBoundingClientRect()
+      const canvasWidth = Math.round(bounds.width * PDF_CAPTURE_SCALE)
+      const gaps = Array.from(preview.querySelectorAll('.pdf-page-gap'))
+        .map(element => ({
+          top: element.getBoundingClientRect().top - bounds.top,
+          height: element.getBoundingClientRect().height
+        }))
+      const totalGapHeight = gaps.reduce((total, gap) => total + gap.height, 0)
+      const canvasHeight = Math.round((bounds.height - totalGapHeight) * PDF_CAPTURE_SCALE)
+      const candidatePageBreaks = Array.from(preview.querySelectorAll('[data-pdf-page-break]'))
+        .map(element => {
+          const elementBottom = element.getBoundingClientRect().bottom - bounds.top
+          const precedingGapsHeight = gaps
+            .filter(gap => gap.top < elementBottom)
+            .reduce((total, gap) => total + gap.height, 0)
+          return {
+            id: element.dataset.pdfPageBreak,
+            position: Math.round((elementBottom - precedingGapsHeight) * PDF_CAPTURE_SCALE)
+          }
+        })
+        .filter(({ position }) => position > 0 && position < canvasHeight)
+        .sort((first, second) => first.position - second.position)
+      const pageEnds = getPdfPageEnds(
+        canvasHeight,
+        Math.floor(canvasWidth * PDF_PAGE_CONTENT_HEIGHT_RATIO),
+        candidatePageBreaks
+      )
+      const pageBreaks = []
+      let pageStart = 0
+      pageEnds.slice(0, -1).forEach(pageEnd => {
+        if (pageEnd.breakId) {
+          const usedPageHeight = (pageEnd.position - pageStart) / PDF_CAPTURE_SCALE
+          const pageMarginHeight = bounds.width * (10 / 190)
+          const pageContentHeight = bounds.width * PDF_PAGE_CONTENT_HEIGHT_RATIO
+          const bottomWhiteHeight = Math.max(0, pageContentHeight - usedPageHeight + pageMarginHeight)
+          pageBreaks.push({
+            id: pageEnd.breakId,
+            bottomWhiteHeight: Math.round(bottomWhiteHeight * 100) / 100,
+            topWhiteHeight: Math.round(pageMarginHeight * 100) / 100,
+            dividerHeight: 8
+          })
+        }
+        pageStart = pageEnd.position
+      })
+
+      setCategoryReportPageBreaks(current => (
+        current.length === pageBreaks.length &&
+        current.every((pageBreak, index) => (
+          pageBreak.id === pageBreaks[index].id &&
+          pageBreak.bottomWhiteHeight === pageBreaks[index].bottomWhiteHeight &&
+          pageBreak.topWhiteHeight === pageBreaks[index].topWhiteHeight &&
+          pageBreak.dividerHeight === pageBreaks[index].dividerHeight
+        ))
+          ? current
+          : pageBreaks
+      ))
+    }
+
+    updatePageBreaks()
+    const resizeObserver = new ResizeObserver(updatePageBreaks)
+    resizeObserver.observe(preview)
+    return () => resizeObserver.disconnect()
+  }, [showCategoryReportPreview, selectedSummaryCategories, expenses, filterMonth, filterYear])
+
   const downloadCategoryReport = async () => {
     setIsGeneratingCategoryReport(true)
     setCategoryReportError('')
@@ -380,21 +481,47 @@ function Expenses() {
         throw new Error('No se encontró la vista previa para generar el PDF.')
       }
 
-      const canvas = await html2canvas(categoryReportPreviewRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff'
+      const preview = categoryReportPreviewRef.current
+      const canvas = await html2canvas(preview, {
+        scale: PDF_CAPTURE_SCALE,
+        backgroundColor: '#ffffff',
+        onclone: clonedDocument => {
+          clonedDocument.querySelectorAll('.pdf-page-gap').forEach(element => {
+            element.style.display = 'none'
+          })
+        }
       })
       const pdf = new jsPDF()
       const pageHeight = pdf.internal.pageSize.getHeight()
       const pageMargin = 10
       const imageWidth = pdf.internal.pageSize.getWidth() - pageMargin * 2
-      const imageHeight = canvas.height * imageWidth / canvas.width
       const pageContentHeight = pageHeight - pageMargin * 2
-      const pixelsPerPage = Math.floor(canvas.height * pageContentHeight / imageHeight)
+      const pixelsPerPage = Math.floor(canvas.width * pageContentHeight / imageWidth)
+      const previewBounds = preview.getBoundingClientRect()
+      const gaps = Array.from(preview.querySelectorAll('.pdf-page-gap'))
+        .map(element => ({
+          top: element.getBoundingClientRect().top - previewBounds.top,
+          height: element.getBoundingClientRect().height
+        }))
+      const contentHeight = previewBounds.height - gaps.reduce((total, gap) => total + gap.height, 0)
+      const canvasScaleY = canvas.height / contentHeight
+      const pageBreaks = Array.from(preview.querySelectorAll('[data-pdf-page-break]'))
+        .map(element => {
+          const elementBottom = element.getBoundingClientRect().bottom - previewBounds.top
+          const precedingGapsHeight = gaps
+            .filter(gap => gap.top < elementBottom)
+            .reduce((total, gap) => total + gap.height, 0)
+          return {
+            id: element.dataset.pdfPageBreak,
+            position: Math.round((elementBottom - precedingGapsHeight) * canvasScaleY)
+          }
+        })
+        .filter(({ position }) => position > 0 && position < canvas.height)
+        .sort((first, second) => first.position - second.position)
       let sourceY = 0
 
-      while (sourceY < canvas.height) {
-        const sliceHeight = Math.min(pixelsPerPage, canvas.height - sourceY)
+      getPdfPageEnds(canvas.height, pixelsPerPage, pageBreaks).forEach((pageEnd, pageIndex) => {
+        const sliceHeight = pageEnd.position - sourceY
         const pageCanvas = document.createElement('canvas')
         pageCanvas.width = canvas.width
         pageCanvas.height = sliceHeight
@@ -402,10 +529,10 @@ function Expenses() {
         if (!pageContext) throw new Error('No se pudo preparar una página del PDF.')
         pageContext.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight)
         const sliceImageHeight = sliceHeight * imageWidth / canvas.width
-        if (sourceY > 0) pdf.addPage()
+        if (pageIndex > 0) pdf.addPage()
         pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', pageMargin, pageMargin, imageWidth, sliceImageHeight)
-        sourceY += sliceHeight
-      }
+        sourceY = pageEnd.position
+      })
 
       pdf.save(`resumen-categorias-${filterYear || 'todos'}-${filterMonth || 'meses'}.pdf`)
     } catch (error) {
@@ -440,6 +567,33 @@ function Expenses() {
     setBudgetDraft('')
   }
 
+  const renderPdfPageGap = breakId => {
+    const pageBreak = categoryReportPageBreaks.find(item => item.id === breakId)
+    if (!pageBreak) return null
+
+    return (
+      <div
+        className="pdf-page-gap"
+        aria-hidden="true"
+        style={{
+          marginLeft: 'clamp(-42px, -5vw, -18px)',
+          marginRight: 'clamp(-42px, -5vw, -18px)',
+          width: 'calc(100% + clamp(36px, 10vw, 84px))'
+        }}
+      >
+        <div style={{ height: `${pageBreak.bottomWhiteHeight}px`, backgroundColor: '#fff' }} />
+        <div
+          style={{
+            height: `${pageBreak.dividerHeight}px`,
+            backgroundColor: '#d5d8dc',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.18), 0 -2px 4px rgba(0, 0, 0, 0.12)'
+          }}
+        />
+        <div style={{ height: `${pageBreak.topWhiteHeight}px`, backgroundColor: '#fff' }} />
+      </div>
+    )
+  }
+
   const budgetExpenses = expenses.filter(expense => {
     const [, month, year] = expense.date.split('/')
     return expense.type !== 'income' && `${year}-${month.padStart(2, '0')}` === budgetMonth
@@ -454,12 +608,7 @@ function Expenses() {
     ? []
     : budgetExpenses
       .filter(expense => expense.category === selectedBudgetCategory)
-      .sort((first, second) => {
-        const [firstDay, firstMonth, firstYear] = first.date.split('/')
-        const [secondDay, secondMonth, secondYear] = second.date.split('/')
-        return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
-          new Date(`${firstYear}-${firstMonth}-${firstDay}`)
-      })
+      .sort(compareMovementDatesAscending)
   const octoberBudgetMonth = budgetMonth.endsWith('-10')
     ? budgetMonth
     : `${budgetMonth.slice(0, 4)}-10` in categoryBudgets
@@ -500,8 +649,8 @@ function Expenses() {
 
   const getExpensesByMonth = () => {
     const months = {}
-    const filteredExpenses = filterHistoryExpenses()
-    
+    const filteredExpenses = filterHistoryExpenses().sort(compareMovementDatesAscending)
+
     filteredExpenses.forEach(expense => {
       const dateParts = expense.date.split('/')
       const expenseDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0])
@@ -586,12 +735,7 @@ function Expenses() {
               ? expense.type === 'income'
               : expense.type !== 'income')
           ))
-          .sort((first, second) => {
-            const [firstDay, firstMonth, firstYear] = first.date.split('/')
-            const [secondDay, secondMonth, secondYear] = second.date.split('/')
-            return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
-              new Date(`${firstYear}-${firstMonth}-${firstDay}`)
-          })
+          .sort(compareMovementDatesAscending)
       }
     : null
 
@@ -1807,12 +1951,7 @@ function Expenses() {
             const selectedCategory = allCategories.find(cat => cat.id === categoryId)
             const categoryExpenses = filterExpensesByDate()
               .filter(expense => expense.category === categoryId)
-              .sort((first, second) => {
-                const [firstDay, firstMonth, firstYear] = first.date.split('/')
-                const [secondDay, secondMonth, secondYear] = second.date.split('/')
-                return new Date(`${secondYear}-${secondMonth}-${secondDay}`) -
-                  new Date(`${firstYear}-${firstMonth}-${firstDay}`)
-              })
+              .sort(compareMovementDatesAscending)
 
             return (
               <div
@@ -2190,7 +2329,8 @@ function Expenses() {
                 ×
               </button>
             </div>
-            <div ref={categoryReportPreviewRef} style={{ backgroundColor: 'white', padding: 'clamp(18px, 5vw, 42px)', margin: '0 auto 16px', maxWidth: '595px', minHeight: '500px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', boxSizing: 'border-box', textAlign: 'left' }}>
+            <div style={{ position: 'relative', maxWidth: '595px', margin: '0 auto 16px' }}>
+            <div ref={categoryReportPreviewRef} style={{ backgroundColor: 'white', padding: 'clamp(18px, 5vw, 42px)', minHeight: '500px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', boxSizing: 'border-box', textAlign: 'left' }}>
               <h2 style={{ margin: '0 0 6px', color: '#333', fontSize: '22px' }}>Control de las finanzas</h2>
               <h3 style={{ margin: '0 0 4px', color: '#495057', fontSize: '17px' }}>Resumen por categorías</h3>
               <p style={{ margin: '0 0 20px', color: '#6c757d', fontSize: '13px' }}>Periodo: {categoryReportPeriod}</p>
@@ -2214,37 +2354,47 @@ function Expenses() {
                 <span>Importe</span>
               </div>
               {categoryReportRows.map(row => (
-                <div key={row.id} style={{ borderBottom: '1px solid #dee2e6', padding: '8px 0' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '12px', alignItems: 'center' }}>
-                    <span style={{ color: '#333', fontSize: '14px' }}>{row.icon} {row.name}</span>
-                    <span />
-                    <strong style={{ color: row.total === 0 ? '#6c757d' : row.isIncome ? '#18743a' : '#b42318', fontSize: '14px', whiteSpace: 'nowrap' }}>
-                      {row.total === 0 ? '' : row.isIncome ? '+' : '−'}{formatCurrency(row.total)}
-                    </strong>
+                <div key={row.id} data-pdf-page-break={`category-${row.id}`} style={{ borderBottom: '1px solid #dee2e6', padding: '8px 0' }}>
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ color: '#333', fontSize: '14px' }}>{row.icon} {row.name}</span>
+                      <span />
+                      <strong style={{ color: row.total === 0 ? '#6c757d' : row.isIncome ? '#18743a' : '#b42318', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                        {row.total === 0 ? '' : row.isIncome ? '+' : '−'}{formatCurrency(row.total)}
+                      </strong>
+                    </div>
+                    {categoryReportDetails
+                      .filter(detail => detail.category.id === row.id)
+                      .map(({ category: selectedCategory, isIncome, movements }) => (
+                        <div key={selectedCategory.id} style={{ margin: '8px 0 0 14px', paddingLeft: '12px', borderLeft: `3px solid ${selectedCategory.color}`, backgroundColor: '#f8f9fa' }}>
+                          {movements.length === 0 ? (
+                            <p style={{ margin: 0, padding: '7px 8px', color: '#6c757d', fontSize: '12px' }}>
+                              Sin movimientos en el periodo seleccionado.
+                            </p>
+                          ) : (
+                            movements.map(movement => {
+                              const breakId = `movement-${movement.id}`
+                              return (
+                                <Fragment key={movement.id}>
+                                  <div data-pdf-page-break={breakId} style={{ borderBottom: '1px solid #e9ecef', padding: '7px 8px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '10px', alignItems: 'center' }}>
+                                    <div style={{ minWidth: 0, color: '#333', fontSize: '13px', overflowWrap: 'anywhere' }}>{movement.description}</div>
+                                    <span style={{ color: '#6c757d', fontSize: '11px', whiteSpace: 'nowrap' }}>{movement.date}</span>
+                                    <strong style={{ color: isIncome ? '#18743a' : '#b42318', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                      {isIncome ? '+' : '−'}{formatCurrency(movement.amount)}
+                                    </strong>
+                                  </div>
+                                  {renderPdfPageGap(breakId)}
+                                </Fragment>
+                              )
+                            })
+                          )}
+                        </div>
+                      ))}
                   </div>
-                  {categoryReportDetails
-                    .filter(detail => detail.category.id === row.id)
-                    .map(({ category: selectedCategory, isIncome, movements }) => (
-                      <div key={selectedCategory.id} style={{ margin: '8px 0 0 14px', paddingLeft: '12px', borderLeft: `3px solid ${selectedCategory.color}`, backgroundColor: '#f8f9fa' }}>
-                        {movements.length === 0 ? (
-                          <p style={{ margin: 0, padding: '7px 8px', color: '#6c757d', fontSize: '12px' }}>
-                            Sin movimientos en el periodo seleccionado.
-                          </p>
-                        ) : (
-                          movements.map(movement => (
-                            <div key={movement.id} style={{ borderBottom: '1px solid #e9ecef', padding: '7px 8px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(78px, auto) auto', gap: '10px', alignItems: 'center' }}>
-                              <div style={{ minWidth: 0, color: '#333', fontSize: '13px', overflowWrap: 'anywhere' }}>{movement.description}</div>
-                              <span style={{ color: '#6c757d', fontSize: '11px', whiteSpace: 'nowrap' }}>{movement.date}</span>
-                              <strong style={{ color: isIncome ? '#18743a' : '#b42318', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                                {isIncome ? '+' : '−'}{formatCurrency(movement.amount)}
-                              </strong>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    ))}
+                  {renderPdfPageGap(`category-${row.id}`)}
                 </div>
               ))}
+            </div>
             </div>
             {categoryReportError && (
               <p role="alert" style={{ margin: '0 0 12px', color: '#b42318', textAlign: 'right' }}>

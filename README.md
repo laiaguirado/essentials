@@ -51,7 +51,7 @@ Un espacio para guardar cualquier idea o apunte:
 Control financiero con:
 
 - Registro de gastos e ingresos.
-- Categorías y filtros por año y mes.
+- Categorías de gastos e ingresos, incluida Seguros, y filtros por año y mes.
 - Balance y resúmenes por periodo.
 - Movimientos recurrentes.
 - Presupuestos por categoría.
