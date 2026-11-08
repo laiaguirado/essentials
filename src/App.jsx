@@ -1,16 +1,17 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 import PropTypes from 'prop-types'
 import './App.css'
 import Tasks from './Tasks.jsx'
 import Reminders from './Reminders.jsx'
-import Expenses from './Expenses.jsx'
 import Calendar from './calendar.jsx'
 import QuickTools from './quickTools.jsx'
 import Links from './links.jsx'
 import Notes from './notes.jsx'
 import { useUserData } from './auth/useUserData.js'
 import { useAuth } from './auth/useAuth.js'
+
+const Expenses = lazy(() => import('./Expenses.jsx'))
 
 const monthFormatter = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' })
 const dateFormatter = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' })
@@ -51,5 +52,5 @@ HomeNotesSummary.propTypes = { notes: PropTypes.arrayOf(PropTypes.object).isRequ
 function Home() { const { session } = useAuth(); const [tasks] = useUserData('dailyTasks', []); const [reminders] = useUserData('dailyReminders', []); const [expenses] = useUserData('expenses', []); const [notes] = useUserData('notes', []); const accountName = session?.user?.email?.split('@')[0] || session?.user?.email || 'tu espacio'; return <WorkspaceLayout active="home"><header className="dashboard-header"><div><p className="eyebrow">{dateFormatter.format(new Date())}</p><h1>Buenos días, {accountName} <span aria-hidden="true">✦</span></h1><p className="header-subtitle">Un pequeño vistazo para empezar con claridad.</p></div></header><LinksSummary /><section className="dashboard-grid dashboard-middle-grid"><FinanceSummary expenses={expenses} /><DailyMotivation /></section><section className="dashboard-grid dashboard-top-grid home-daily-grid"><MonthCalendar reminders={reminders} /><HomeTaskSummary tasks={tasks} /><HomeReminderSummary reminders={reminders} /></section><HomeNotesSummary notes={notes} /><QuickToolsSummary /></WorkspaceLayout> }
 function QuickToolsPage() { return <WorkspaceLayout active="quick-tools"><header className="dashboard-header inner-page-header"><div><h1>Quick tools</h1><p className="header-subtitle">Pequeñas ayudas para resolver decisiones y tareas del día a día.</p></div></header><QuickTools /></WorkspaceLayout> }
 function LinksPage() { return <WorkspaceLayout active="links"><header className="dashboard-header inner-page-header"><div><h1>Links</h1><p className="header-subtitle">Tus enlaces favoritos organizados para encontrarlos rápido.</p></div></header><Links /></WorkspaceLayout> }
-function App() { return <Routes><Route path="/" element={<Home />} /><Route path="/calendar" element={<WorkspaceLayout active="calendar"><Calendar /></WorkspaceLayout>} /><Route path="/quick-tools" element={<QuickToolsPage />} /><Route path="/links" element={<LinksPage />} /><Route path="/tasks" element={<WorkspaceLayout active="tasks"><Tasks /></WorkspaceLayout>} /><Route path="/reminders" element={<WorkspaceLayout active="reminders"><Reminders /></WorkspaceLayout>} /><Route path="/expenses" element={<WorkspaceLayout active="expenses"><Expenses /></WorkspaceLayout>} /><Route path="/notes" element={<WorkspaceLayout active="notes"><Notes /></WorkspaceLayout>} /></Routes> }
+function App() { return <Routes><Route path="/" element={<Home />} /><Route path="/calendar" element={<WorkspaceLayout active="calendar"><Calendar /></WorkspaceLayout>} /><Route path="/quick-tools" element={<QuickToolsPage />} /><Route path="/links" element={<LinksPage />} /><Route path="/tasks" element={<WorkspaceLayout active="tasks"><Tasks /></WorkspaceLayout>} /><Route path="/reminders" element={<WorkspaceLayout active="reminders"><Reminders /></WorkspaceLayout>} /><Route path="/expenses" element={<WorkspaceLayout active="expenses"><Suspense fallback={<p role="status">Cargando finanzas…</p>}><Expenses /></Suspense></WorkspaceLayout>} /><Route path="/notes" element={<WorkspaceLayout active="notes"><Notes /></WorkspaceLayout>} /></Routes> }
 export default App

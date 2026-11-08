@@ -14,6 +14,96 @@ function compareMovementDatesAscending(first, second) {
     Date.UTC(Number(secondYear), Number(secondMonth) - 1, Number(secondDay))
 }
 
+function getTimelineBuckets(movements, filterMonth, filterYear) {
+  const monthNames = Array.from({ length: 12 }, (_, index) => (
+    new Date(Date.UTC(2024, index, 1)).toLocaleDateString('es-ES', { month: 'long', timeZone: 'UTC' })
+  ))
+  const selectedMonthIndex = monthNames.indexOf(filterMonth.toLocaleLowerCase('es-ES'))
+  const amountsByPeriod = new Map()
+
+  movements.forEach(movement => {
+    const [day, month, year] = movement.date.split('/').map(Number)
+    if (!day || !month || !year) return
+    const monthIndex = month - 1
+    const periodKey = filterMonth
+      ? String(day)
+      : filterYear
+        ? String(monthIndex)
+        : `${year}-${String(month).padStart(2, '0')}`
+    const totals = amountsByPeriod.get(periodKey) || {
+      expenses: 0,
+      income: 0,
+      expenseCount: 0,
+      incomeCount: 0,
+      expenseCategories: {},
+      incomeCategories: {}
+    }
+    const isIncome = movement.type === 'income'
+    const series = isIncome ? 'income' : 'expenses'
+    const categorySeries = isIncome ? 'incomeCategories' : 'expenseCategories'
+    const categoryId = movement.category || 'general'
+    const categoryTotals = totals[categorySeries]
+    categoryTotals[categoryId] ||= { count: 0, amount: 0 }
+    categoryTotals[categoryId].count += 1
+    categoryTotals[categoryId].amount += Number(movement.amount) || 0
+    totals[series] += Number(movement.amount) || 0
+    totals[isIncome ? 'incomeCount' : 'expenseCount'] += 1
+    amountsByPeriod.set(periodKey, totals)
+  })
+
+  const emptyPeriod = () => ({
+    expenses: 0,
+    income: 0,
+    expenseCount: 0,
+    incomeCount: 0,
+    expenseCategories: {},
+    incomeCategories: {}
+  })
+
+  if (filterMonth && selectedMonthIndex !== -1) {
+    const yearForMonth = filterYear ? Number(filterYear) : 2024
+    const dayCount = new Date(Date.UTC(yearForMonth, selectedMonthIndex + 1, 0)).getUTCDate()
+    return Array.from({ length: dayCount }, (_, index) => {
+      const key = String(index + 1)
+      return { label: key, key, ...emptyPeriod(), ...amountsByPeriod.get(key) }
+    })
+  }
+
+  if (filterYear) {
+    return monthNames.map((month, index) => {
+      const key = String(index)
+      return {
+        label: month.slice(0, 3),
+        key,
+        ...emptyPeriod(),
+        ...amountsByPeriod.get(key)
+      }
+    })
+  }
+
+  const monthKeys = [...amountsByPeriod.keys()].sort()
+  if (monthKeys.length === 0) return []
+
+  const [firstYear, firstMonth] = monthKeys[0].split('-').map(Number)
+  const [lastYear, lastMonth] = monthKeys[monthKeys.length - 1].split('-').map(Number)
+  const buckets = []
+  for (let year = firstYear, month = firstMonth; year < lastYear || (year === lastYear && month <= lastMonth);) {
+    const key = `${year}-${String(month).padStart(2, '0')}`
+    buckets.push({
+      key,
+      label: `${monthNames[month - 1].slice(0, 3)} ${year}`,
+      ...emptyPeriod(),
+      ...amountsByPeriod.get(key)
+    })
+    month += 1
+    if (month > 12) {
+      month = 1
+      year += 1
+    }
+  }
+  return buckets
+}
+
 const PDF_CAPTURE_SCALE = 2
 const PDF_PAGE_CONTENT_HEIGHT_RATIO = 277 / 190
 const HISTORY_PAGE_SIZE = 100
@@ -206,12 +296,17 @@ function Expenses() {
   const [historyType, setHistoryType] = useState('all')
   const [historyFromDate, setHistoryFromDate] = useState('')
   const [historyToDate, setHistoryToDate] = useState('')
+  const [historyPeriod, setHistoryPeriod] = useState(null)
   const [historyVisibleCount, setHistoryVisibleCount] = useState(HISTORY_PAGE_SIZE)
   const [filterMonth, setFilterMonth] = useState('')
-  const [filterYear, setFilterYear] = useState('')
+  const [filterYear, setFilterYear] = useState(() => String(new Date().getFullYear()))
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
+  const [showMovementTimeline, setShowMovementTimeline] = useState(true)
+  const [timelineType, setTimelineType] = useState('expense')
+  const [hoveredTimelinePeriod, setHoveredTimelinePeriod] = useState(null)
+  const [selectedTimelinePeriod, setSelectedTimelinePeriod] = useState(null)
   const [showCategoryReportPreview, setShowCategoryReportPreview] = useState(false)
   const [categoryReportPageBreaks, setCategoryReportPageBreaks] = useState([])
   const [isGeneratingCategoryReport, setIsGeneratingCategoryReport] = useState(false)
@@ -219,8 +314,10 @@ function Expenses() {
   const [selectedSummaryCategories, setSelectedSummaryCategories] = useState([])
   const [showMonthlyBudget, setShowMonthlyBudget] = useState(false)
   const [showSavingsGoals, setShowSavingsGoals] = useState(false)
+  const [showRecurringMovements, setShowRecurringMovements] = useState(false)
   const [selectedBudgetCategory, setSelectedBudgetCategory] = useState('all')
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
+  const [shouldScrollToHistory, setShouldScrollToHistory] = useState(false)
   const [hoveredCategory, setHoveredCategory] = useState(null)
   const [selectedDistributionCategory, setSelectedDistributionCategory] = useState(null)
   const [editingExpenseId, setEditingExpenseId] = useState(null)
@@ -234,11 +331,28 @@ function Expenses() {
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null)
   const [budgetDraft, setBudgetDraft] = useState('')
   const categoryReportPreviewRef = useRef(null)
+  const historySectionRef = useRef(null)
+  const chartOriginFiltersRef = useRef(null)
   const processedRecurringOccurrences = useRef(new Set())
 
   useEffect(() => {
+    setHoveredTimelinePeriod(null)
+    setSelectedTimelinePeriod(null)
+  }, [filterMonth, filterYear, timelineType])
+
+  useEffect(() => {
     setHistoryVisibleCount(HISTORY_PAGE_SIZE)
-  }, [expenses, historySearch, historyCategory, historyType, historyFromDate, historyToDate, filterMonth, filterYear])
+  }, [expenses, historySearch, historyCategory, historyType, historyFromDate, historyToDate, historyPeriod, filterMonth, filterYear])
+
+  useEffect(() => {
+    if (!showExpenseHistory || !shouldScrollToHistory) return undefined
+
+    const frame = requestAnimationFrame(() => {
+      historySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setShouldScrollToHistory(false)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [showExpenseHistory, shouldScrollToHistory])
 
   useEffect(() => {
     const today = new Date()
@@ -465,6 +579,10 @@ function Expenses() {
 
     return totals
   }, [filteredExpensesByDate])
+  const movementTimeline = useMemo(
+    () => getTimelineBuckets(filteredExpensesByDate, filterMonth, filterYear),
+    [filteredExpensesByDate, filterMonth, filterYear]
+  )
   const getCategoryTotal = categoryId => categoryTotals[categoryId] || 0
 
   const categoryReportRows = useMemo(() => allCategories.map(cat => ({
@@ -750,6 +868,75 @@ function Expenses() {
         ? '#ffc107'
         : '#28a745'
 
+  const openHistoryForTimelineCategory = (categoryId, bucket) => {
+    if (!historyPeriod) {
+      chartOriginFiltersRef.current = { month: filterMonth, year: filterYear }
+    }
+
+    let period
+    let fromDate
+    let toDate
+    if (filterMonth) {
+      const monthIndex = Array.from({ length: 12 }, (_, index) => (
+        new Date(Date.UTC(2024, index, 1)).toLocaleDateString('es-ES', { month: 'long', timeZone: 'UTC' })
+      )).indexOf(filterMonth.toLocaleLowerCase('es-ES'))
+      const month = monthIndex + 1
+      const matchingMovements = filteredExpensesByDate.filter(movement => {
+        const [day, movementMonth] = movement.date.split('/').map(Number)
+        return day === Number(bucket.key) &&
+          movementMonth === month &&
+          movement.category === categoryId &&
+          (timelineType === 'income' ? movement.type === 'income' : movement.type !== 'income')
+      })
+      const selectedYear = filterYear
+        ? Number(filterYear)
+        : Math.max(...matchingMovements.map(movement => Number(movement.date.split('/')[2])))
+      period = {
+        day: Number(bucket.key),
+        month,
+        year: selectedYear
+      }
+      const date = `${selectedYear}-${String(month).padStart(2, '0')}-${String(period.day).padStart(2, '0')}`
+      fromDate = date
+      toDate = date
+      if (!filterYear) setFilterYear(String(selectedYear))
+    } else if (filterYear) {
+      const month = Number(bucket.key) + 1
+      period = { month, year: Number(filterYear) }
+      fromDate = `${filterYear}-${String(month).padStart(2, '0')}-01`
+      toDate = `${filterYear}-${String(month).padStart(2, '0')}-${String(new Date(Number(filterYear), month, 0).getDate()).padStart(2, '0')}`
+    } else {
+      const [year, month] = bucket.key.split('-').map(Number)
+      period = { month, year }
+      fromDate = `${year}-${String(month).padStart(2, '0')}-01`
+      toDate = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+    }
+
+    setHistoryPeriod(period)
+    setHistoryCategory(categoryId)
+    setHistoryType(timelineType)
+    setHistorySearch('')
+    setHistoryFromDate(fromDate)
+    setHistoryToDate(toDate)
+    setShowExpenseHistory(true)
+    setShouldScrollToHistory(true)
+  }
+
+  const clearChartHistoryFilters = () => {
+    const originFilters = chartOriginFiltersRef.current
+    if (originFilters) {
+      setFilterMonth(originFilters.month)
+      setFilterYear(originFilters.year)
+    }
+    chartOriginFiltersRef.current = null
+    setHistoryPeriod(null)
+    setHistoryCategory('all')
+    setHistoryType('all')
+    setHistorySearch('')
+    setHistoryFromDate('')
+    setHistoryToDate('')
+  }
+
   const filteredHistoryExpenses = useMemo(() => {
     if (!showExpenseHistory) return []
 
@@ -762,6 +949,10 @@ function Expenses() {
       const yearMatches = !filterYear || movementDate.getFullYear().toString() === filterYear
       if (!monthMatches || !yearMatches) return false
 
+      const periodMatches = !historyPeriod ||
+        (movementDate.getMonth() + 1 === historyPeriod.month &&
+          (!historyPeriod.year || movementDate.getFullYear() === historyPeriod.year) &&
+          (!historyPeriod.day || movementDate.getDate() === historyPeriod.day))
       const categoryMatches = historyCategory === 'all' || expense.category === historyCategory
       const typeMatches = historyType === 'all' ||
         (historyType === 'income' ? expense.type === 'income' : expense.type !== 'income')
@@ -771,7 +962,7 @@ function Expenses() {
       const categoryName = categoriesById.get(expense.category)?.name || ''
       const searchMatches = !search ||
         `${expense.description} ${categoryName}`.toLocaleLowerCase('es-ES').includes(search)
-      return categoryMatches && typeMatches && fromMatches && toMatches && searchMatches
+      return periodMatches && categoryMatches && typeMatches && fromMatches && toMatches && searchMatches
     }).sort(compareMovementDatesAscending)
   }, [
     expenses,
@@ -782,6 +973,7 @@ function Expenses() {
     historyType,
     historyFromDate,
     historyToDate,
+    historyPeriod,
     showExpenseHistory
   ])
 
@@ -817,7 +1009,7 @@ function Expenses() {
   }, [expenses, filterYear])
 
   const availableYears = useMemo(() => {
-    const years = new Set()
+    const years = new Set([String(new Date().getFullYear())])
     expenses.forEach(expense => {
       const dateParts = expense.date.split('/')
       const expenseDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0])
@@ -870,6 +1062,36 @@ function Expenses() {
 
     return gradient ? `conic-gradient(${gradient})` : 'conic-gradient(#e0e0e0 0% 100%)'
   }
+
+  const timelineTitle = filterMonth
+    ? `Evolución diaria · ${filterMonth.charAt(0).toUpperCase()}${filterMonth.slice(1)}${filterYear ? ` ${filterYear}` : ''}`
+    : filterYear
+      ? `Evolución mensual · ${filterYear}`
+      : 'Evolución mensual · todos los años'
+  const timelineSeries = timelineType === 'income' ? 'income' : 'expenses'
+  const timelineCountKey = timelineType === 'income' ? 'incomeCount' : 'expenseCount'
+  const timelineCategoryKey = timelineType === 'income' ? 'incomeCategories' : 'expenseCategories'
+  const timelineSeriesLabel = timelineType === 'income' ? 'Ingresos' : 'Gastos'
+  const timelineSeriesColor = timelineType === 'income' ? '#28a745' : '#dc5968'
+  const timelineCategories = timelineType === 'income' ? incomeCategories : categories
+  const hoveredTimelineBucket = movementTimeline.find(bucket => bucket.key === hoveredTimelinePeriod) ||
+    movementTimeline.find(bucket => bucket.key === selectedTimelinePeriod)
+  const historyPeriodLabel = historyPeriod
+    ? `${historyPeriod.day ? `Día ${historyPeriod.day} · ` : ''}${new Date(Date.UTC(2024, historyPeriod.month - 1, 1)).toLocaleDateString('es-ES', { month: 'long', timeZone: 'UTC' })}${historyPeriod.year ? ` ${historyPeriod.year}` : ' · todos los años'}`
+    : ''
+  const timelineWidth = 1200
+  const timelineHeight = 300
+  const timelineLeft = Math.min(64, Math.max(54, timelineWidth * 0.14))
+  const timelineTop = 18
+  const timelineBottom = 42
+  const timelinePlotWidth = timelineWidth - timelineLeft - 12
+  const timelinePlotHeight = timelineHeight - timelineTop - timelineBottom
+  const timelineMaxValue = Math.max(
+    1,
+    ...movementTimeline.map(bucket => bucket[timelineSeries])
+  ) * 1.1
+  const timelineLabelInterval = filterMonth ? 1 : Math.max(1, Math.ceil(movementTimeline.length / 20))
+  const timelineBarWidth = Math.min(32, (timelinePlotWidth / Math.max(movementTimeline.length, 1)) * 0.65)
 
   return (
     <div className="finance-page" style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
@@ -985,27 +1207,38 @@ function Expenses() {
 
       {recurringMovements.length > 0 && (
         <section style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '10px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
-          <h2 style={{ margin: '0 0 12px', color: '#495057', fontSize: '18px' }}>🔁 Movimientos recurrentes</h2>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {recurringMovements.map(template => {
-              const templateCategory = allCategories.find(item => item.id === template.category)
-              return (
-                <div key={template.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '7px', borderLeft: `4px solid ${templateCategory?.color || '#6c757d'}` }}>
-                  <span style={{ color: '#333' }}>
-                    {templateCategory?.icon} {template.description} · {formatCurrency(template.amount)} · {template.frequency === 'weekly' ? 'Semanal' : 'Mensual'} · Próximo: {parseLocalDate(template.nextDate).toLocaleDateString('es-ES')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setRecurringMovements(current => current.filter(item => item.id !== template.id))}
-                    aria-label={`Eliminar recurrencia: ${template.description}`}
-                    style={{ border: 'none', borderRadius: '6px', padding: '6px 9px', backgroundColor: '#dc3545', color: 'white', cursor: 'pointer', flexShrink: 0 }}
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+          <button
+            type="button"
+            aria-expanded={showRecurringMovements}
+            aria-controls="recurring-movements-content"
+            onClick={() => setShowRecurringMovements(open => !open)}
+            style={{ width: '100%', padding: 0, border: 'none', background: 'none', color: '#495057', fontSize: '18px', fontWeight: 'bold', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <span>🔁 Movimientos recurrentes ({recurringMovements.length})</span>
+            <span aria-hidden="true">{showRecurringMovements ? '▲' : '▼'}</span>
+          </button>
+          {showRecurringMovements && (
+            <div id="recurring-movements-content" style={{ display: 'grid', gap: '8px', marginTop: '12px' }}>
+              {recurringMovements.map(template => {
+                const templateCategory = allCategories.find(item => item.id === template.category)
+                return (
+                  <div key={template.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '7px', borderLeft: `4px solid ${templateCategory?.color || '#6c757d'}` }}>
+                    <span style={{ color: '#333' }}>
+                      {templateCategory?.icon} {template.description} · {formatCurrency(template.amount)} · {template.frequency === 'weekly' ? 'Semanal' : 'Mensual'} · Próximo: {parseLocalDate(template.nextDate).toLocaleDateString('es-ES')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRecurringMovements(current => current.filter(item => item.id !== template.id))}
+                      aria-label={`Eliminar recurrencia: ${template.description}`}
+                      style={{ border: 'none', borderRadius: '6px', padding: '6px 9px', backgroundColor: '#dc3545', color: 'white', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </section>
       )}
 
@@ -1025,6 +1258,249 @@ function Expenses() {
           </strong>
         </div>
       </div>
+
+      <section
+        aria-labelledby="movement-timeline-title"
+        style={{ backgroundColor: '#f8f9fa', padding: '18px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', cursor: showMovementTimeline ? 'default' : 'pointer' }}
+        onClick={() => {
+          if (!showMovementTimeline) setShowMovementTimeline(true)
+        }}
+      >
+        <button
+          type="button"
+          id="movement-timeline-title"
+          aria-expanded={showMovementTimeline}
+          aria-controls="movement-timeline-content"
+          onClick={event => {
+            event.stopPropagation()
+            setShowMovementTimeline(open => !open)
+          }}
+          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', position: 'relative', marginBottom: showMovementTimeline ? '14px' : 0, padding: 0, border: 0, background: 'none', color: '#495057', textAlign: 'center', font: 'inherit', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          <span><span aria-hidden="true">📈 </span>{timelineTitle}</span>
+          <span aria-hidden="true" style={{ position: 'absolute', right: 0 }}>{showMovementTimeline ? '▲' : '▼'}</span>
+        </button>
+        {showMovementTimeline && (
+        <div id="movement-timeline-content">
+          <div style={{ marginBottom: '14px' }}>
+          <p style={{ margin: '5px 0 0', color: '#6c757d', fontSize: '13px' }}>
+            {filterMonth && !filterYear
+              ? 'Se muestran los días del mes seleccionado, agrupando todos los años.'
+              : 'Selecciona gastos o ingresos para ver su evolución con una escala propia.'}
+          </p>
+          </div>
+        <div role="group" aria-label="Tipo de movimiento del gráfico" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
+          {[
+            { type: 'expense', label: 'Gastos', color: '#dc5968' },
+            { type: 'income', label: 'Ingresos', color: '#218838' }
+          ].map(option => (
+            <button
+              key={option.type}
+              type="button"
+              aria-pressed={timelineType === option.type}
+              onClick={() => setTimelineType(option.type)}
+              style={{
+                padding: '8px 18px',
+                border: `1px solid ${option.color}`,
+                borderRadius: '20px',
+                backgroundColor: timelineType === option.type ? option.color : 'white',
+                color: timelineType === option.type ? 'white' : option.color,
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {movementTimeline.length === 0 ? (
+          <p style={{ margin: 0, color: '#6c757d', textAlign: 'center', padding: '30px 0' }}>
+            No hay {timelineSeriesLabel.toLowerCase()} para mostrar en este periodo.
+          </p>
+        ) : (
+          <div style={{ width: '100%', minWidth: 0 }}>
+            <svg
+              role="img"
+              aria-label={`${timelineTitle}, gráfico de ${timelineSeriesLabel.toLowerCase()}`}
+              viewBox={`0 0 ${timelineWidth} ${timelineHeight}`}
+              width="100%"
+              height="300"
+              preserveAspectRatio="none"
+              style={{ display: 'block', width: '100%', height: '300px' }}
+            >
+                <title>{timelineTitle}</title>
+                <desc>Importes de {timelineSeriesLabel.toLowerCase()} agrupados por periodo. El eje monetario utiliza una escala propia para esta serie.</desc>
+                {[0, 1, 2, 3, 4].map(tick => {
+                  const amount = timelineMaxValue * (4 - tick) / 4
+                  const y = timelineTop + timelinePlotHeight * tick / 4
+                  return (
+                    <g key={tick}>
+                      <line x1={timelineLeft} y1={y} x2={timelineWidth - 8} y2={y} stroke="#dee2e6" strokeWidth="1" />
+                      <text x={timelineLeft - 8} y={y + 4} textAnchor="end" fill="#6c757d" fontSize="11">
+                        {new Intl.NumberFormat('es-ES', { notation: 'compact', maximumFractionDigits: 1 }).format(amount)} €
+                      </text>
+                    </g>
+                  )
+                })}
+                {movementTimeline.map((bucket, index) => {
+                  const groupWidth = timelinePlotWidth / movementTimeline.length
+                  const centerX = timelineLeft + groupWidth * (index + 0.5)
+                  const barHeight = bucket[timelineSeries] / timelineMaxValue * timelinePlotHeight
+                  const baseline = timelineTop + timelinePlotHeight
+                  const showLabel = index % timelineLabelInterval === 0 || index === movementTimeline.length - 1
+                  return (
+                    <g
+                      key={bucket.key}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedTimelinePeriod === bucket.key}
+                      aria-label={`${bucket.label}: ${bucket[timelineCountKey]} ${timelineSeriesLabel.toLowerCase()}, ${formatCurrency(bucket[timelineSeries])}`}
+                      onMouseEnter={() => {
+                        setHoveredTimelinePeriod(bucket.key)
+                        if (selectedTimelinePeriod !== null) setSelectedTimelinePeriod(bucket.key)
+                      }}
+                      onMouseLeave={() => setHoveredTimelinePeriod(null)}
+                      onFocus={() => {
+                        setHoveredTimelinePeriod(bucket.key)
+                        if (selectedTimelinePeriod !== null) setSelectedTimelinePeriod(bucket.key)
+                      }}
+                      onBlur={() => setHoveredTimelinePeriod(null)}
+                      onClick={() => {
+                        if (selectedTimelinePeriod !== null) {
+                          setSelectedTimelinePeriod(null)
+                          setHoveredTimelinePeriod(null)
+                          return
+                        }
+                        setSelectedTimelinePeriod(bucket.key)
+                        setHoveredTimelinePeriod(bucket.key)
+                      }}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          if (selectedTimelinePeriod !== null) {
+                            setSelectedTimelinePeriod(null)
+                            setHoveredTimelinePeriod(null)
+                          } else {
+                            setSelectedTimelinePeriod(bucket.key)
+                            setHoveredTimelinePeriod(bucket.key)
+                          }
+                        }
+                      }}
+                      style={{ cursor: 'pointer', outline: 'none' }}
+                    >
+                      <rect
+                        x={centerX - groupWidth / 2}
+                        y={timelineTop}
+                        width={groupWidth}
+                        height={timelinePlotHeight}
+                        fill="transparent"
+                        pointerEvents="all"
+                      />
+                      <rect
+                        x={centerX - timelineBarWidth / 2}
+                        y={baseline - barHeight}
+                        width={timelineBarWidth}
+                        height={barHeight}
+                        rx="2"
+                        fill={timelineSeriesColor}
+                      >
+                        <title>{`${bucket.label}: ${timelineSeriesLabel.toLowerCase()} ${formatCurrency(bucket[timelineSeries])}`}</title>
+                      </rect>
+                      {showLabel && (
+                        <text x={centerX} y={baseline + 22} textAnchor="middle" fill="#6c757d" fontSize="11">
+                          {bucket.label}
+                        </text>
+                      )}
+                    </g>
+                  )
+                })}
+            </svg>
+            {hoveredTimelineBucket && (
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  marginTop: '10px',
+                  padding: '16px',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  borderRadius: '14px',
+                  border: '1px solid #e9edf2',
+                  borderLeft: `5px solid ${timelineSeriesColor}`,
+                  boxShadow: '0 4px 14px rgba(32, 48, 72, 0.08)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span aria-hidden="true" style={{ fontSize: '22px' }}>{timelineType === 'income' ? '💰' : '🧾'}</span>
+                    <div>
+                      <strong style={{ display: 'block', color: '#343a40', fontSize: '17px', textTransform: 'capitalize' }}>
+                        {hoveredTimelineBucket.label}
+                      </strong>
+                      <span style={{ color: '#6c757d', fontSize: '12px' }}>Detalle del periodo</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ padding: '6px 10px', borderRadius: '999px', backgroundColor: `${timelineSeriesColor}18`, color: timelineSeriesColor, fontSize: '13px', fontWeight: 700 }}>
+                      {hoveredTimelineBucket[timelineCountKey]} {hoveredTimelineBucket[timelineCountKey] === 1 ? 'movimiento' : 'movimientos'}
+                    </span>
+                    <strong style={{ color: timelineSeriesColor, fontSize: '20px', whiteSpace: 'nowrap' }}>
+                      {formatCurrency(hoveredTimelineBucket[timelineSeries])}
+                    </strong>
+                  </div>
+                </div>
+                {hoveredTimelineBucket[timelineCountKey] === 0 ? (
+                  <p style={{ margin: '14px 0 0', padding: '12px', color: '#6c757d', backgroundColor: '#f1f3f5', borderRadius: '9px', textAlign: 'center' }}>
+                    No hay movimientos de esta serie en este periodo.
+                  </p>
+                ) : (
+                  <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))', gap: '10px', margin: '14px 0 0', padding: 0, listStyle: 'none', alignItems: 'stretch' }}>
+                    {timelineCategories
+                      .filter(category => hoveredTimelineBucket[timelineCategoryKey][category.id])
+                      .map(category => {
+                        const categoryTotal = hoveredTimelineBucket[timelineCategoryKey][category.id]
+                        return (
+                          <li key={category.id} style={{ minWidth: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => openHistoryForTimelineCategory(category.id, hoveredTimelineBucket)}
+                              title={`Ver ${timelineSeriesLabel.toLowerCase()} de ${category.name} en ${hoveredTimelineBucket.label}`}
+                              style={{ width: '100%', minHeight: '88px', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: '36px minmax(0, 1fr) auto', gridTemplateRows: '1fr auto', alignItems: 'center', columnGap: '10px', rowGap: '3px', padding: '12px', backgroundColor: 'white', border: '1px solid #edf0f3', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', font: 'inherit', transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }}
+                              onMouseEnter={event => {
+                                event.currentTarget.style.borderColor = category.color
+                                event.currentTarget.style.boxShadow = '0 3px 10px rgba(32, 48, 72, 0.1)'
+                              }}
+                              onMouseLeave={event => {
+                                event.currentTarget.style.borderColor = '#edf0f3'
+                                event.currentTarget.style.boxShadow = 'none'
+                              }}
+                            >
+                            <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center', gridColumn: '1', gridRow: '1 / 3', width: '36px', height: '36px', borderRadius: '9px', backgroundColor: `${category.color}18`, fontSize: '18px' }}>
+                              {category.icon}
+                            </span>
+                            <span style={{ gridColumn: '2', gridRow: '1', minWidth: 0 }}>
+                              <strong style={{ display: 'block', overflow: 'hidden', color: '#495057', fontSize: '13px', lineHeight: '18px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {category.name}
+                              </strong>
+                            </span>
+                            <strong style={{ gridColumn: '3', gridRow: '1', color: '#343a40', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                              {formatCurrency(categoryTotal.amount)}
+                            </strong>
+                            <span style={{ gridColumn: '2 / 4', gridRow: '2', color: '#7b8794', fontSize: '12px', lineHeight: '16px', whiteSpace: 'nowrap' }}>
+                              {categoryTotal.count} {categoryTotal.count === 1 ? 'movimiento' : 'movimientos'}
+                            </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+        )}
+      </section>
 
       {/* Gráfico de porcentajes - Pie Chart */}
       <div style={{ 
@@ -2109,8 +2585,10 @@ function Expenses() {
       </div>
 
       {/* Lista de gastos por meses */}
-      <div style={{ 
-        backgroundColor: '#f8f9fa', 
+      <div
+        ref={historySectionRef}
+        style={{
+        backgroundColor: '#f8f9fa',
         padding: showExpenseHistory ? '25px' : '15px',
         borderRadius: '12px',
         marginBottom: '20px',
@@ -2168,6 +2646,22 @@ function Expenses() {
             <input aria-label="Fecha final del historial" type="date" value={historyToDate} onChange={event => setHistoryToDate(event.target.value)} style={{ minWidth: 0, width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
           </label>
         </div>
+        {historyPeriod && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', margin: '-4px 0 16px', padding: '10px 12px', borderRadius: '8px', backgroundColor: '#eef5ff', color: '#245eb5', fontSize: '13px' }}>
+            <span>
+              Filtrado desde el gráfico: <strong>{historyPeriodLabel}</strong>
+              {historyCategory !== 'all' && ` · ${categoriesById.get(historyCategory)?.name || historyCategory}`}
+              {historyType !== 'all' && ` · ${historyType === 'income' ? 'Ingresos' : 'Gastos'}`}
+            </span>
+            <button
+              type="button"
+              onClick={clearChartHistoryFilters}
+              style={{ border: 0, background: 'transparent', color: '#245eb5', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Quitar filtro
+            </button>
+          </div>
+        )}
         {filteredHistoryExpenses.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>
             {expenses.length === 0 ? 'No hay movimientos registrados. ¡Añade tu primer movimiento!' : 'No hay movimientos que coincidan con los filtros seleccionados.'}
