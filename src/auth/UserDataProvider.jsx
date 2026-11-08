@@ -2,8 +2,10 @@ import PropTypes from 'prop-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import UserDataContext from './UserDataContext.js'
+import { getTableRowIdentity, recordsFromTableRows, tableConfigForKey, toTableRows } from './userDataTables.js'
 const MIGRATION_MARKER = 'essentials-cloud-migration-v1'
 const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes']
+const DATA_KEYS = LOCAL_KEYS
 
 function readLocalData() {
   return LOCAL_KEYS.flatMap(key => {
@@ -56,6 +58,70 @@ function readLocalData() {
   })
 }
 
+async function loadTableData(userId) {
+  const rowsByKey = {}
+  const responses = await Promise.all(DATA_KEYS.map(async key => {
+    const { table, columns } = tableConfigForKey(key)
+    const response = await supabase.from(table).select(columns).eq('user_id', userId)
+    return { key, ...response }
+  }))
+
+  const failedResponse = responses.find(({ error }) => error)
+  if (failedResponse) throw failedResponse.error
+
+  for (const { key, data } of responses) rowsByKey[key] = data
+  return rowsByKey
+}
+
+async function saveLocalData(userId, localRecords) {
+  for (const { key, value } of localRecords) {
+    const { table, identity } = tableConfigForKey(key)
+    const rows = toTableRows(key, value, userId)
+    if (rows.length === 0) continue
+
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows, { onConflict: ['user_id', ...identity].join(',') })
+    if (error) throw error
+  }
+}
+
+async function syncTableData(userId, key, previousValue, nextValue) {
+  const { table, identity } = tableConfigForKey(key)
+  const previousRows = toTableRows(key, previousValue, userId)
+  const nextRows = toTableRows(key, nextValue, userId)
+  const previousByIdentity = new Map(previousRows.map(row => [getTableRowIdentity(key, row), row]))
+  const nextByIdentity = new Map(nextRows.map(row => [getTableRowIdentity(key, row), row]))
+  const changedRows = nextRows.filter(row => (
+    JSON.stringify(previousByIdentity.get(getTableRowIdentity(key, row))) !== JSON.stringify(row)
+  ))
+
+  if (changedRows.length > 0) {
+    const { error } = await supabase
+      .from(table)
+      .upsert(changedRows, { onConflict: ['user_id', ...identity].join(',') })
+    if (error) throw error
+  }
+
+  const removedRows = previousRows.filter(row => !nextByIdentity.has(getTableRowIdentity(key, row)))
+  if (identity.length === 1 && removedRows.length > 0) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('user_id', userId)
+      .in(identity[0], removedRows.map(row => row[identity[0]]))
+    if (error) throw error
+    return
+  }
+
+  for (const row of removedRows) {
+    let query = supabase.from(table).delete().eq('user_id', userId)
+    for (const field of identity) query = query.eq(field, row[field])
+    const { error } = await query
+    if (error) throw error
+  }
+}
+
 export function UserDataProvider({ userId, children }) {
   const [records, setRecords] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -75,40 +141,39 @@ export function UserDataProvider({ userId, children }) {
       setSaveError('')
       setMigrationNotice('')
 
-      const { data, error } = await supabase
-        .from('user_data')
-        .select('key, value')
-        .eq('user_id', userId)
-
       if (!active) return
-      if (error) {
-        setLoadError(`No se pudieron cargar tus datos: ${error.message}`)
+      let rowsByKey
+      try {
+        rowsByKey = await loadTableData(userId)
+      } catch (error) {
+        if (!active) return
+        const migrationHint = error.code === '42P01'
+          ? ' Ejecuta supabase/migrate_user_data_to_feature_tables.sql en el SQL Editor de Supabase.'
+          : ''
+        setLoadError(`No se pudieron cargar tus datos: ${error.message}.${migrationHint}`)
         return
       }
 
-      const cloudRecords = Object.fromEntries(data.map(record => [record.key, record.value]))
+      if (!active) return
+      const cloudRecords = recordsFromTableRows(rowsByKey)
+      const hasCloudData = Object.values(rowsByKey).some(rows => rows.length > 0)
       const migrationStatus = localStorage.getItem(MIGRATION_MARKER)
       let nextMigrationNotice = ''
 
       if (!migrationStatus) {
         try {
           const localRecords = readLocalData()
-          if (localRecords.length > 0 && data.length === 0) {
-            const rows = localRecords.map(record => ({ ...record, user_id: userId }))
-            const { error: migrationError } = await supabase
-              .from('user_data')
-              .upsert(rows, { onConflict: 'user_id,key' })
-
-            if (migrationError) throw migrationError
+          if (localRecords.length > 0 && !hasCloudData) {
+            await saveLocalData(userId, localRecords)
             for (const { key } of localRecords) localStorage.removeItem(key)
             Object.assign(cloudRecords, Object.fromEntries(localRecords.map(({ key, value }) => [key, value])))
             localStorage.setItem(MIGRATION_MARKER, `migrated:${userId}`)
           } else {
             localStorage.setItem(
               MIGRATION_MARKER,
-              data.length > 0 && localRecords.length > 0 ? `skipped:${userId}` : `empty:${userId}`,
+              hasCloudData && localRecords.length > 0 ? `skipped:${userId}` : `empty:${userId}`,
             )
-            if (data.length > 0 && localRecords.length > 0) {
+            if (hasCloudData && localRecords.length > 0) {
               nextMigrationNotice = 'Los datos antiguos de este navegador no se importaron porque esta cuenta ya tiene datos. Siguen guardados localmente.'
             }
           }
@@ -141,26 +206,11 @@ export function UserDataProvider({ userId, children }) {
       }
 
       const value = currentRecords[key]
-      const { error } = await supabase
-        .from('user_data')
-        .upsert(
-          { user_id: userId, key, value, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id,key' },
-        )
-      if (error) throw error
+      await syncTableData(userId, key, savedRecords.current[key], value)
 
       savedRecords.current = { ...savedRecords.current, [key]: value }
       setSaveError('')
     }).catch(error => {
-      if (key === 'dailyReminders' && error.code === '23514') {
-        setSaveError('Supabase aún no permite guardar recordatorios. Ejecuta supabase/add_daily_reminders.sql en el SQL Editor de Supabase y vuelve a intentar el guardado.')
-        return
-      }
-      if ((key === 'recurringMovements' || key === 'savingsGoals') && error.code === '23514') {
-        setSaveError('Supabase aún no permite guardar recurrencias u objetivos de ahorro. Ejecuta supabase/add_finance_features.sql en el SQL Editor de Supabase y vuelve a intentar el guardado.')
-        return
-      }
-
       setSaveError(`No se pudieron guardar tus cambios (${key}): ${error.message}`)
     })
     saveQueues.current[key] = operation

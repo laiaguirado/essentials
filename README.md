@@ -94,7 +94,7 @@ La aplicación usa Supabase para la autenticación y la persistencia de datos:
 - Datos separados por usuario.
 - Row Level Security para que cada usuario solo pueda consultar y modificar sus propios datos.
 
-Los datos de la aplicación se almacenan en `public.user_data` como documentos JSON asociados al usuario autenticado. El esquema contempla tareas, hábitos, recordatorios, gastos, presupuestos, movimientos recurrentes, objetivos de ahorro y notas.
+Los datos se almacenan en tablas separadas por funcionalidad, con `user_id` y campos consultables para fechas, categorías y tipos. `public.user_data` se conserva como origen histórico de la migración.
 
 ## 🧱 Tecnologías
 
