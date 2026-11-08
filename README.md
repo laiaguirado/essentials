@@ -109,7 +109,7 @@ Los datos de la aplicación se almacenan en `public.user_data` como documentos J
 
 ### Requisitos
 
-- Node.js 20 o superior recomendado.
+- Node.js 24 o superior.
 - Un proyecto de Supabase.
 
 ### Instalación

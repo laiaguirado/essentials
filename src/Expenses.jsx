@@ -28,7 +28,8 @@ const categories = [
   { id: 'compras', name: 'Compras', color: '#4bc0c0', brightColor: '#6dd4d4', icon: '🛍️' },
   { id: 'salud', name: 'Salud', color: '#9966ff', brightColor: '#b385ff', icon: '💊' },
   { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' },
-  { id: 'seguros', name: 'Seguros', color: '#20a39e', brightColor: '#40c4b5', icon: '🛡️' }
+  { id: 'seguros', name: 'Seguros', color: '#20a39e', brightColor: '#40c4b5', icon: '🛡️' },
+  { id: 'viajes', name: 'Viajes', color: '#5b7cfa', brightColor: '#8098ff', icon: '✈️' }
 ]
 const incomeCategories = [
   { id: 'salary', name: 'Salario', color: '#28a745', brightColor: '#52c76f', icon: '💼' },
