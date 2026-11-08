@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState, useRef } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import PropTypes from 'prop-types'
 import { useUserData } from './auth/useUserData.js'
 
 function formatCurrency(amount) {
@@ -15,6 +16,139 @@ function compareMovementDatesAscending(first, second) {
 
 const PDF_CAPTURE_SCALE = 2
 const PDF_PAGE_CONTENT_HEIGHT_RATIO = 277 / 190
+const HISTORY_PAGE_SIZE = 100
+
+const categories = [
+  { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
+  { id: 'restaurantes', name: 'Restaurantes', color: '#ff6384', brightColor: '#ff85a1', icon: '🍽️' },
+  { id: 'supermercado', name: 'Supermercado', color: '#28a745', brightColor: '#52c76f', icon: '🛒' },
+  { id: 'suscripciones', name: 'Suscripciones', color: '#845ec2', brightColor: '#a27de0', icon: '📺' },
+  { id: 'transporte', name: 'Transporte', color: '#36a2eb', brightColor: '#5bb8f5', icon: '🚗' },
+  { id: 'entretenimiento', name: 'Entretenimiento', color: '#ff9f40', brightColor: '#ffb366', icon: '🎮' },
+  { id: 'compras', name: 'Compras', color: '#4bc0c0', brightColor: '#6dd4d4', icon: '🛍️' },
+  { id: 'salud', name: 'Salud', color: '#9966ff', brightColor: '#b385ff', icon: '💊' },
+  { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' },
+  { id: 'seguros', name: 'Seguros', color: '#20a39e', brightColor: '#40c4b5', icon: '🛡️' }
+]
+const incomeCategories = [
+  { id: 'salary', name: 'Salario', color: '#28a745', brightColor: '#52c76f', icon: '💼' },
+  { id: 'refunds', name: 'Devoluciones', color: '#36a2eb', brightColor: '#5bb8f5', icon: '↩️' },
+  { id: 'sales', name: 'Ventas', color: '#845ec2', brightColor: '#a27de0', icon: '🛍️' },
+  { id: 'other-income', name: 'Otros ingresos', color: '#ff9f40', brightColor: '#ffb366', icon: '💰' }
+]
+const allCategories = [...categories, ...incomeCategories]
+const categoriesById = new Map(allCategories.map(category => [category.id, category]))
+
+const QuickAddMovementForm = memo(function QuickAddMovementForm({ onSave }) {
+  const [description, setDescription] = useState('')
+  const [amount, setAmount] = useState('')
+  const [category, setCategory] = useState('general')
+  const [movementType, setMovementType] = useState('expense')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState('monthly')
+  const currentCategories = movementType === 'income' ? incomeCategories : categories
+
+  const save = event => {
+    event.preventDefault()
+    if (!description || !amount) return
+
+    onSave({ description, amount, category, movementType, date, isRecurring, recurrenceFrequency })
+  }
+
+  return (
+    <div style={{
+      backgroundColor: '#f8f9fa',
+      padding: '20px',
+      borderRadius: '10px',
+      marginTop: '15px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    }}>
+      <form onSubmit={save}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+          <select
+            aria-label="Tipo de movimiento"
+            value={movementType}
+            onChange={event => {
+              const nextType = event.target.value
+              setMovementType(nextType)
+              setCategory(nextType === 'income' ? incomeCategories[0].id : categories[0].id)
+            }}
+            style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+          >
+            <option value="expense">💸 Gasto</option>
+            <option value="income">💰 Ingreso</option>
+          </select>
+          <input
+            aria-label="Descripción del movimiento"
+            type="text"
+            value={description}
+            onChange={event => setDescription(event.target.value)}
+            placeholder="Descripción"
+            required
+            style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+          />
+          <input
+            aria-label="Importe en euros"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={event => setAmount(event.target.value)}
+            placeholder="Cantidad (€)"
+            required
+            style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+          />
+          <select
+            aria-label="Categoría del movimiento"
+            value={category}
+            onChange={event => setCategory(event.target.value)}
+            style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+          >
+            {currentCategories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Fecha del gasto"
+            type="date"
+            value={date}
+            onChange={event => setDate(event.target.value)}
+            required
+            style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#495057' }}>
+            <input type="checkbox" checked={isRecurring} onChange={event => setIsRecurring(event.target.checked)} />
+            Repetir movimiento
+          </label>
+          {isRecurring && (
+            <select
+              aria-label="Frecuencia del movimiento"
+              value={recurrenceFrequency}
+              onChange={event => setRecurrenceFrequency(event.target.value)}
+              style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+            >
+              <option value="monthly">Cada mes</option>
+              <option value="weekly">Cada semana</option>
+            </select>
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
+            {movementType === 'income' ? '💰 Añadir ingreso' : '💸 Añadir gasto'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+})
+
+QuickAddMovementForm.propTypes = {
+  onSave: PropTypes.func.isRequired
+}
 
 function getPdfPageEnds(totalHeight, pageHeight, candidatePageBreaks) {
   const pageEnds = []
@@ -59,13 +193,6 @@ function Expenses() {
   const [expenses, setExpenses] = useUserData('expenses', [])
   const [recurringMovements, setRecurringMovements] = useUserData('recurringMovements', [])
   const [savingsGoals, setSavingsGoals] = useUserData('savingsGoals', [])
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [category, setCategory] = useState('general')
-  const [movementType, setMovementType] = useState('expense')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState('monthly')
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
   const [goalSaved, setGoalSaved] = useState('')
@@ -78,6 +205,7 @@ function Expenses() {
   const [historyType, setHistoryType] = useState('all')
   const [historyFromDate, setHistoryFromDate] = useState('')
   const [historyToDate, setHistoryToDate] = useState('')
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(HISTORY_PAGE_SIZE)
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -106,6 +234,10 @@ function Expenses() {
   const [budgetDraft, setBudgetDraft] = useState('')
   const categoryReportPreviewRef = useRef(null)
   const processedRecurringOccurrences = useRef(new Set())
+
+  useEffect(() => {
+    setHistoryVisibleCount(HISTORY_PAGE_SIZE)
+  }, [expenses, historySearch, historyCategory, historyType, historyFromDate, historyToDate, filterMonth, filterYear])
 
   useEffect(() => {
     const today = new Date()
@@ -145,27 +277,6 @@ function Expenses() {
     if (hasUpdatedSchedule) setRecurringMovements(updatedRecurringMovements)
   }, [recurringMovements, setExpenses, setRecurringMovements])
 
-  const categories = [
-    { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
-    { id: 'restaurantes', name: 'Restaurantes', color: '#ff6384', brightColor: '#ff85a1', icon: '🍽️' },
-    { id: 'supermercado', name: 'Supermercado', color: '#28a745', brightColor: '#52c76f', icon: '🛒' },
-    { id: 'suscripciones', name: 'Suscripciones', color: '#845ec2', brightColor: '#a27de0', icon: '📺' },
-    { id: 'transporte', name: 'Transporte', color: '#36a2eb', brightColor: '#5bb8f5', icon: '🚗' },
-    { id: 'entretenimiento', name: 'Entretenimiento', color: '#ff9f40', brightColor: '#ffb366', icon: '🎮' },
-    { id: 'compras', name: 'Compras', color: '#4bc0c0', brightColor: '#6dd4d4', icon: '🛍️' },
-    { id: 'salud', name: 'Salud', color: '#9966ff', brightColor: '#b385ff', icon: '💊' },
-    { id: 'hogar', name: 'Hogar', color: '#ffcd56', brightColor: '#ffdb7a', icon: '🏠' },
-    { id: 'seguros', name: 'Seguros', color: '#20a39e', brightColor: '#40c4b5', icon: '🛡️' }
-  ]
-  const incomeCategories = [
-    { id: 'salary', name: 'Salario', color: '#28a745', brightColor: '#52c76f', icon: '💼' },
-    { id: 'refunds', name: 'Devoluciones', color: '#36a2eb', brightColor: '#5bb8f5', icon: '↩️' },
-    { id: 'sales', name: 'Ventas', color: '#845ec2', brightColor: '#a27de0', icon: '🛍️' },
-    { id: 'other-income', name: 'Otros ingresos', color: '#ff9f40', brightColor: '#ffb366', icon: '💰' }
-  ]
-  const allCategories = [...categories, ...incomeCategories]
-  const currentCategories = movementType === 'income' ? incomeCategories : categories
-
   const hasMonthSpecificBudgets = Object.keys(savedCategoryBudgets).some(key => /^\d{4}-\d{2}$/.test(key))
   const monthBudgets = hasMonthSpecificBudgets
     ? savedCategoryBudgets
@@ -181,21 +292,7 @@ function Expenses() {
     })
   )
 
-  const resetExpenseForm = () => {
-    setDescription('')
-    setAmount('')
-    setCategory('general')
-    setMovementType('expense')
-    setDate(new Date().toISOString().split('T')[0])
-    setIsRecurring(false)
-    setRecurrenceFrequency('monthly')
-    setShowQuickAdd(false)
-  }
-
-  const saveExpense = (e) => {
-    e.preventDefault()
-    if (!description || !amount) return
-
+  const saveExpense = useCallback(({ description, amount, category, movementType, date, isRecurring, recurrenceFrequency }) => {
     const newExpense = {
       id: Date.now(),
       description,
@@ -219,8 +316,8 @@ function Expenses() {
         nextDate: addRecurrenceInterval(date, recurrenceFrequency)
       }])
     }
-    resetExpenseForm()
-  }
+    setShowQuickAdd(false)
+  }, [setExpenses, setRecurringMovements])
 
   const editExpense = (expense) => {
     const [day, month, year] = expense.date.split('/')
@@ -647,11 +744,45 @@ function Expenses() {
         ? '#ffc107'
         : '#28a745'
 
-  const getExpensesByMonth = () => {
-    const months = {}
-    const filteredExpenses = filterHistoryExpenses().sort(compareMovementDatesAscending)
+  const filteredHistoryExpenses = useMemo(() => {
+    if (!showExpenseHistory) return []
 
-    filteredExpenses.forEach(expense => {
+    const search = historySearch.trim().toLocaleLowerCase('es-ES')
+    return expenses.filter(expense => {
+      const [day, month, year] = expense.date.split('/')
+      const movementDate = new Date(year, month - 1, day)
+      const monthMatches = !filterMonth ||
+        movementDate.toLocaleDateString('es-ES', { month: 'long' }).toLowerCase() === filterMonth.toLowerCase()
+      const yearMatches = !filterYear || movementDate.getFullYear().toString() === filterYear
+      if (!monthMatches || !yearMatches) return false
+
+      const categoryMatches = historyCategory === 'all' || expense.category === historyCategory
+      const typeMatches = historyType === 'all' ||
+        (historyType === 'income' ? expense.type === 'income' : expense.type !== 'income')
+      const expenseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+      const fromMatches = !historyFromDate || expenseDate >= historyFromDate
+      const toMatches = !historyToDate || expenseDate <= historyToDate
+      const categoryName = categoriesById.get(expense.category)?.name || ''
+      const searchMatches = !search ||
+        `${expense.description} ${categoryName}`.toLocaleLowerCase('es-ES').includes(search)
+      return categoryMatches && typeMatches && fromMatches && toMatches && searchMatches
+    }).sort(compareMovementDatesAscending)
+  }, [
+    expenses,
+    filterMonth,
+    filterYear,
+    historySearch,
+    historyCategory,
+    historyType,
+    historyFromDate,
+    historyToDate,
+    showExpenseHistory
+  ])
+
+  const historyExpensesByMonth = useMemo(() => {
+    const months = {}
+    const firstVisibleIndex = Math.max(0, filteredHistoryExpenses.length - historyVisibleCount)
+    filteredHistoryExpenses.slice(firstVisibleIndex).forEach(expense => {
       const dateParts = expense.date.split('/')
       const expenseDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0])
       const monthKey = expenseDate.toLocaleDateString('es-ES', { year: 'numeric', month: 'long' })
@@ -661,24 +792,7 @@ function Expenses() {
       months[monthKey].push(expense)
     })
     return months
-  }
-
-  const filterHistoryExpenses = () => {
-    const search = historySearch.trim().toLocaleLowerCase('es-ES')
-    return filterExpensesByDate().filter(expense => {
-      const categoryMatches = historyCategory === 'all' || expense.category === historyCategory
-      const typeMatches = historyType === 'all' ||
-        (historyType === 'income' ? expense.type === 'income' : expense.type !== 'income')
-      const [day, month, year] = expense.date.split('/')
-      const expenseDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-      const fromMatches = !historyFromDate || expenseDate >= historyFromDate
-      const toMatches = !historyToDate || expenseDate <= historyToDate
-      const categoryName = allCategories.find(item => item.id === expense.category)?.name || ''
-      const searchMatches = !search ||
-        `${expense.description} ${categoryName}`.toLocaleLowerCase('es-ES').includes(search)
-      return categoryMatches && typeMatches && fromMatches && toMatches && searchMatches
-    })
-  }
+  }, [filteredHistoryExpenses, historyVisibleCount])
 
   const getAvailableMonthsForYear = (year) => {
     const monthsMap = new Map()
@@ -869,94 +983,7 @@ function Expenses() {
           {showQuickAdd ? '▼ Añadir movimiento' : '➕ Añadir movimiento'}
         </button>
         
-        {showQuickAdd && (
-          <div style={{ 
-            backgroundColor: '#f8f9fa', 
-            padding: '20px', 
-            borderRadius: '10px', 
-            marginTop: '15px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <form onSubmit={saveExpense}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-                <select
-                  aria-label="Tipo de movimiento"
-                  value={movementType}
-                  onChange={event => {
-                    const nextType = event.target.value
-                    setMovementType(nextType)
-                    setCategory(nextType === 'income' ? incomeCategories[0].id : categories[0].id)
-                  }}
-                  style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
-                >
-                  <option value="expense">💸 Gasto</option>
-                  <option value="income">💰 Ingreso</option>
-                </select>
-                <input
-                  aria-label="Descripción del movimiento"
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descripción"
-                  required
-                  style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
-                />
-                <input
-                  aria-label="Importe en euros"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Cantidad (€)"
-                  required
-                  style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
-                />
-                <select
-                  aria-label="Categoría del movimiento"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
-                >
-                  {currentCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                  ))}
-                </select>
-                <input
-                  aria-label="Fecha del gasto"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  required
-                  style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#495057' }}>
-                  <input type="checkbox" checked={isRecurring} onChange={event => setIsRecurring(event.target.checked)} />
-                  Repetir movimiento
-                </label>
-                {isRecurring && (
-                  <select
-                    aria-label="Frecuencia del movimiento"
-                    value={recurrenceFrequency}
-                    onChange={event => setRecurrenceFrequency(event.target.value)}
-                    style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                  >
-                    <option value="monthly">Cada mes</option>
-                    <option value="weekly">Cada semana</option>
-                  </select>
-                )}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="submit" style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: 'white', cursor: 'pointer' }}>
-                  {movementType === 'income' ? '💰 Añadir ingreso' : '💸 Añadir gasto'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        {showQuickAdd && <QuickAddMovementForm onSave={saveExpense} />}
       </div>
 
       {recurringMovements.length > 0 && (
@@ -2136,13 +2163,13 @@ function Expenses() {
             <input aria-label="Fecha final del historial" type="date" value={historyToDate} onChange={event => setHistoryToDate(event.target.value)} style={{ minWidth: 0, width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
           </label>
         </div>
-        {filterHistoryExpenses().length === 0 ? (
+        {filteredHistoryExpenses.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>
             {expenses.length === 0 ? 'No hay movimientos registrados. ¡Añade tu primer movimiento!' : 'No hay movimientos que coincidan con los filtros seleccionados.'}
           </p>
         ) : (
           <div style={{ textAlign: 'left' }}>
-            {Object.entries(getExpensesByMonth()).map(([month, monthExpenses]) => (
+            {Object.entries(historyExpensesByMonth).map(([month, monthExpenses]) => (
               <div key={month} style={{ marginBottom: '30px' }}>
                 <h3 style={{ 
                   color: '#333', 
@@ -2155,7 +2182,7 @@ function Expenses() {
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {monthExpenses.map(expense => {
-                    const cat = allCategories.find(c => c.id === expense.category) || categories[0]
+                    const cat = categoriesById.get(expense.category) || categories[0]
                     return (
                       <div
                         key={expense.id}
@@ -2278,6 +2305,15 @@ function Expenses() {
                 </div>
               </div>
             ))}
+            {historyVisibleCount < filteredHistoryExpenses.length && (
+              <button
+                type="button"
+                onClick={() => setHistoryVisibleCount(count => count + HISTORY_PAGE_SIZE)}
+                style={{ display: 'block', margin: '20px auto 0', padding: '10px 18px', border: 'none', borderRadius: '8px', backgroundColor: '#007bff', color: 'white', cursor: 'pointer' }}
+              >
+                Mostrar más movimientos ({Math.min(HISTORY_PAGE_SIZE, filteredHistoryExpenses.length - historyVisibleCount)})
+              </button>
+            )}
           </div>
         )}
         </div>
