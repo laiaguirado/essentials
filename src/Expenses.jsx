@@ -2146,14 +2146,23 @@ function Expenses() {
             placeholder="Buscar descripción o categoría"
             style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}
           />
-          <select aria-label="Filtrar historial por tipo" value={historyType} onChange={event => setHistoryType(event.target.value)} style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}>
+          <select
+            aria-label="Filtrar historial por tipo"
+            value={historyType}
+            onChange={event => {
+              setHistoryType(event.target.value)
+              setHistoryCategory('all')
+            }}
+            style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}
+          >
             <option value="all">Todos los tipos</option>
             <option value="expense">Gastos</option>
             <option value="income">Ingresos</option>
           </select>
           <select aria-label="Filtrar historial por categoría" value={historyCategory} onChange={event => setHistoryCategory(event.target.value)} style={{ minWidth: 0, padding: '9px', border: '1px solid #ddd', borderRadius: '6px' }}>
             <option value="all">Todas las categorías</option>
-            {allCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
+            {(historyType === 'expense' ? categories : historyType === 'income' ? incomeCategories : allCategories)
+              .map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
           </select>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#495057', fontSize: '13px' }}>
             Desde
