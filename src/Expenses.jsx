@@ -278,20 +278,22 @@ function Expenses() {
     if (hasUpdatedSchedule) setRecurringMovements(updatedRecurringMovements)
   }, [recurringMovements, setExpenses, setRecurringMovements])
 
-  const hasMonthSpecificBudgets = Object.keys(savedCategoryBudgets).some(key => /^\d{4}-\d{2}$/.test(key))
-  const monthBudgets = hasMonthSpecificBudgets
-    ? savedCategoryBudgets
-    : { [initialBudgetMonth.current]: savedCategoryBudgets }
-  const categoryBudgets = Object.fromEntries(
-    Object.entries(monthBudgets).map(([month, budgets]) => {
-      const migratedMonth = { ...budgets }
-      if (migratedMonth.restaurantes === undefined && migratedMonth.comida !== undefined) {
-        migratedMonth.restaurantes = migratedMonth.comida
-      }
-      delete migratedMonth.comida
-      return [month, migratedMonth]
-    })
-  )
+  const categoryBudgets = useMemo(() => {
+    const hasMonthSpecificBudgets = Object.keys(savedCategoryBudgets).some(key => /^\d{4}-\d{2}$/.test(key))
+    const monthBudgets = hasMonthSpecificBudgets
+      ? savedCategoryBudgets
+      : { [initialBudgetMonth.current]: savedCategoryBudgets }
+    return Object.fromEntries(
+      Object.entries(monthBudgets).map(([month, budgets]) => {
+        const migratedMonth = { ...budgets }
+        if (migratedMonth.restaurantes === undefined && migratedMonth.comida !== undefined) {
+          migratedMonth.restaurantes = migratedMonth.comida
+        }
+        delete migratedMonth.comida
+        return [month, migratedMonth]
+      })
+    )
+  }, [savedCategoryBudgets])
 
   const saveExpense = useCallback(({ description, amount, category, movementType, date, isRecurring, recurrenceFrequency }) => {
     const newExpense = {
@@ -429,21 +431,8 @@ function Expenses() {
     setExpenses(expenses.filter(expense => expense.id !== id))
   }
 
-  const getTotal = () => {
-    const filteredExpenses = filterExpensesByDate()
-    return filteredExpenses
-      .filter(expense => expense.type !== 'income')
-      .reduce((total, expense) => total + expense.amount, 0)
-  }
-
-  const getIncomeTotal = () => {
-    return filterExpensesByDate()
-      .filter(expense => expense.type === 'income')
-      .reduce((total, income) => total + income.amount, 0)
-  }
-
-  const filterExpensesByDate = () => {
-    return expenses.filter(expense => {
+  const filteredExpensesByDate = useMemo(() => (
+    expenses.filter(expense => {
       const dateParts = expense.date.split('/')
       const expenseDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0])
       
@@ -452,32 +441,44 @@ function Expenses() {
       
       return monthMatch && yearMatch
     })
-  }
+  ), [expenses, filterMonth, filterYear])
+  const { expenseTotal, incomeTotal, categoryTotals } = useMemo(() => {
+    const totals = {
+      expenseTotal: 0,
+      incomeTotal: 0,
+      categoryTotals: Object.fromEntries(allCategories.map(category => [category.id, 0]))
+    }
 
-  const getCategoryTotal = (categoryId) => {
-    const filteredExpenses = filterExpensesByDate()
-    return filteredExpenses
-      .filter(expense => (
-        expense.category === categoryId &&
-        (incomeCategories.some(cat => cat.id === categoryId)
-          ? expense.type === 'income'
-          : expense.type !== 'income')
-      ))
-      .reduce((total, expense) => total + expense.amount, 0)
-  }
+    filteredExpensesByDate.forEach(expense => {
+      if (expense.type === 'income') {
+        totals.incomeTotal += expense.amount
+        if (Object.hasOwn(totals.categoryTotals, expense.category)) {
+          totals.categoryTotals[expense.category] += expense.amount
+        }
+      } else {
+        totals.expenseTotal += expense.amount
+        if (Object.hasOwn(totals.categoryTotals, expense.category)) {
+          totals.categoryTotals[expense.category] += expense.amount
+        }
+      }
+    })
 
-  const categoryReportRows = allCategories.map(cat => ({
+    return totals
+  }, [filteredExpensesByDate])
+  const getCategoryTotal = categoryId => categoryTotals[categoryId] || 0
+
+  const categoryReportRows = useMemo(() => allCategories.map(cat => ({
     ...cat,
-    total: getCategoryTotal(cat.id),
+    total: categoryTotals[cat.id] || 0,
     isIncome: incomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
-  }))
-  const categoryReportDetails = selectedSummaryCategories
+  })), [categoryTotals])
+  const categoryReportDetails = useMemo(() => selectedSummaryCategories
     .map(categoryId => {
       const selectedCategory = allCategories.find(cat => cat.id === categoryId)
       if (!selectedCategory) return null
 
       const isIncome = incomeCategories.some(cat => cat.id === categoryId)
-      const movements = filterExpensesByDate()
+      const movements = filteredExpensesByDate
         .filter(expense => (
           expense.category === categoryId &&
           (isIncome ? expense.type === 'income' : expense.type !== 'income')
@@ -486,9 +487,9 @@ function Expenses() {
 
       return { category: selectedCategory, isIncome, movements }
     })
-    .filter(Boolean)
-  const categoryReportExpenses = getTotal()
-  const categoryReportIncome = getIncomeTotal()
+    .filter(Boolean), [filteredExpensesByDate, selectedSummaryCategories])
+  const categoryReportExpenses = expenseTotal
+  const categoryReportIncome = incomeTotal
   const categoryReportBalance = categoryReportIncome - categoryReportExpenses
   const categoryReportPeriod = [
     filterMonth ? filterMonth.charAt(0).toUpperCase() + filterMonth.slice(1) : null,
@@ -692,41 +693,45 @@ function Expenses() {
     )
   }
 
-  const budgetExpenses = expenses.filter(expense => {
+  const budgetExpenses = useMemo(() => expenses.filter(expense => {
     const [, month, year] = expense.date.split('/')
     return expense.type !== 'income' && `${year}-${month.padStart(2, '0')}` === budgetMonth
-  })
-  const budgetSpentByCategory = categories.reduce((totals, cat) => {
-    totals[cat.id] = budgetExpenses
-      .filter(expense => expense.category === cat.id)
-      .reduce((total, expense) => total + expense.amount, 0)
+  }), [expenses, budgetMonth])
+  const budgetSpentByCategory = useMemo(() => {
+    const totals = Object.fromEntries(categories.map(cat => [cat.id, 0]))
+    budgetExpenses.forEach(expense => {
+      if (Object.hasOwn(totals, expense.category)) totals[expense.category] += expense.amount
+    })
     return totals
-  }, {})
-  const selectedBudgetMovements = selectedBudgetCategory === 'all'
+  }, [budgetExpenses])
+  const selectedBudgetMovements = useMemo(() => selectedBudgetCategory === 'all'
     ? []
     : budgetExpenses
       .filter(expense => expense.category === selectedBudgetCategory)
-      .sort(compareMovementDatesAscending)
-  const octoberBudgetMonth = budgetMonth.endsWith('-10')
+      .sort(compareMovementDatesAscending), [budgetExpenses, selectedBudgetCategory])
+  const octoberBudgetMonth = useMemo(() => budgetMonth.endsWith('-10')
     ? budgetMonth
     : `${budgetMonth.slice(0, 4)}-10` in categoryBudgets
       ? `${budgetMonth.slice(0, 4)}-10`
       : Object.keys(categoryBudgets)
         .filter(month => /^\d{4}-10$/.test(month))
         .sort()
-        .pop()
-  const octoberBudgets = octoberBudgetMonth ? categoryBudgets[octoberBudgetMonth] || {} : {}
-  const effectiveCategoryBudgets = categories.reduce((budgets, cat) => {
+        .pop(), [budgetMonth, categoryBudgets])
+  const octoberBudgets = useMemo(
+    () => octoberBudgetMonth ? categoryBudgets[octoberBudgetMonth] || {} : {},
+    [categoryBudgets, octoberBudgetMonth],
+  )
+  const effectiveCategoryBudgets = useMemo(() => categories.reduce((budgets, cat) => {
     const monthBudgets = categoryBudgets[budgetMonth] || {}
     budgets[cat.id] = Object.prototype.hasOwnProperty.call(monthBudgets, cat.id)
       ? Number(monthBudgets[cat.id])
       : octoberBudgets[cat.id]
     return budgets
-  }, {})
-  const totalBudgetAllowed = categories.reduce((total, cat) => {
+  }, {}), [budgetMonth, categoryBudgets, octoberBudgets])
+  const totalBudgetAllowed = useMemo(() => categories.reduce((total, cat) => {
     const limit = Number(effectiveCategoryBudgets[cat.id])
     return total + (Number.isFinite(limit) && limit > 0 ? limit : 0)
-  }, 0)
+  }, 0), [effectiveCategoryBudgets])
   const totalBudgetSpent = Object.values(budgetSpentByCategory).reduce((total, spent) => total + spent, 0)
   const budgetCategory = categories.find(cat => cat.id === selectedBudgetCategory)
   const displayedBudgetSpent = budgetCategory ? budgetSpentByCategory[budgetCategory.id] : totalBudgetSpent
@@ -795,13 +800,12 @@ function Expenses() {
     return months
   }, [filteredHistoryExpenses, historyVisibleCount])
 
-  const getAvailableMonthsForYear = (year) => {
+  const availableMonths = useMemo(() => {
     const monthsMap = new Map()
     expenses.forEach(expense => {
       const dateParts = expense.date.split('/')
       const expenseDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0])
-      // Only include months from the selected year
-      if (!year || expenseDate.getFullYear().toString() === year) {
+      if (!filterYear || expenseDate.getFullYear().toString() === filterYear) {
         const monthKey = expenseDate.toLocaleDateString('es-ES', { month: 'long' })
         if (!monthsMap.has(monthKey)) {
           monthsMap.set(monthKey, expenseDate)
@@ -810,9 +814,9 @@ function Expenses() {
     })
     const sortedMonths = Array.from(monthsMap.entries()).sort((a, b) => b[1] - a[1])
     return sortedMonths.map(([month]) => month)
-  }
+  }, [expenses, filterYear])
 
-  const getAvailableYears = () => {
+  const availableYears = useMemo(() => {
     const years = new Set()
     expenses.forEach(expense => {
       const dateParts = expense.date.split('/')
@@ -820,30 +824,22 @@ function Expenses() {
       years.add(expenseDate.getFullYear().toString())
     })
     return Array.from(years).sort((a, b) => b - a)
-  }
+  }, [expenses])
 
-  const filteredExpenses = filterExpensesByDate().filter(expense => expense.type !== 'income')
-  const chartCategoryTotals = categories.reduce((totals, cat) => {
-    totals[cat.id] = filteredExpenses
-      .filter(expense => expense.category === cat.id)
-      .reduce((sum, expense) => sum + expense.amount, 0)
-    return totals
-  }, {})
+  const chartCategoryTotals = useMemo(() => Object.fromEntries(
+    categories.map(cat => [cat.id, categoryTotals[cat.id]])
+  ), [categoryTotals])
   const chartTotal = Object.values(chartCategoryTotals).reduce((sum, amount) => sum + amount, 0)
-  const incomeCategoryTotals = incomeCategories.reduce((totals, cat) => {
-    totals[cat.id] = filterExpensesByDate()
-      .filter(expense => expense.type === 'income' && expense.category === cat.id)
-      .reduce((sum, expense) => sum + expense.amount, 0)
-    return totals
-  }, {})
-  const incomeTotal = Object.values(incomeCategoryTotals).reduce((sum, amount) => sum + amount, 0)
+  const incomeCategoryTotals = useMemo(() => Object.fromEntries(
+    incomeCategories.map(cat => [cat.id, categoryTotals[cat.id]])
+  ), [categoryTotals])
   const selectedDistributionCategories = selectedDistributionCategory?.type === 'income'
     ? incomeCategories
     : categories
-  const selectedDistributionDetails = selectedDistributionCategory
+  const selectedDistributionDetails = useMemo(() => selectedDistributionCategory
     ? {
         category: selectedDistributionCategories.find(cat => cat.id === selectedDistributionCategory.id),
-        expenses: filterExpensesByDate()
+        expenses: filteredExpensesByDate
           .filter(expense => (
             expense.category === selectedDistributionCategory.id &&
             (selectedDistributionCategory.type === 'income'
@@ -852,7 +848,7 @@ function Expenses() {
           ))
           .sort(compareMovementDatesAscending)
       }
-    : null
+    : null, [filteredExpensesByDate, selectedDistributionCategory, selectedDistributionCategories])
 
   const getPieChartGradient = (categoryList, totals, total) => {
     if (total === 0) return 'conic-gradient(#e0e0e0 0% 100%)'
@@ -928,7 +924,7 @@ function Expenses() {
           }}
         >
           <option value="">Todos los años</option>
-          {getAvailableYears().map(year => (
+          {availableYears.map(year => (
             <option key={year} value={year}>{year}</option>
           ))}
         </select>
@@ -946,7 +942,7 @@ function Expenses() {
           }}
         >
           <option value="">Todos los meses</option>
-          {getAvailableMonthsForYear(filterYear).map(month => (
+          {availableMonths.map(month => (
             <option key={month} value={month}>{month.charAt(0).toUpperCase() + month.slice(1)}</option>
           ))}
         </select>
@@ -1016,16 +1012,16 @@ function Expenses() {
       <div className="finance-summary-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '20px' }}>
         <div style={{ backgroundColor: '#fff4f4', color: '#b42318', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: '15px' }}>💸 Gastos</div>
-          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px' }}>{formatCurrency(getTotal())}</strong>
+          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px' }}>{formatCurrency(expenseTotal)}</strong>
         </div>
         <div style={{ backgroundColor: '#effaf2', color: '#18743a', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: '15px' }}>💰 Ingresos</div>
-          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px' }}>{formatCurrency(getIncomeTotal())}</strong>
+          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px' }}>{formatCurrency(incomeTotal)}</strong>
         </div>
         <div style={{ backgroundColor: '#eef5ff', color: '#245eb5', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: '15px' }}>⚖️ Balance</div>
-          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px', color: getIncomeTotal() - getTotal() < 0 ? '#b42318' : '#18743a' }}>
-            {getIncomeTotal() - getTotal() < 0 ? '−' : ''}{formatCurrency(Math.abs(getIncomeTotal() - getTotal()))}
+          <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px', color: incomeTotal - expenseTotal < 0 ? '#b42318' : '#18743a' }}>
+            {incomeTotal - expenseTotal < 0 ? '−' : ''}{formatCurrency(Math.abs(incomeTotal - expenseTotal))}
           </strong>
         </div>
       </div>
@@ -1977,9 +1973,8 @@ function Expenses() {
           })}
           {selectedSummaryCategories.map(categoryId => {
             const selectedCategory = allCategories.find(cat => cat.id === categoryId)
-            const categoryExpenses = filterExpensesByDate()
-              .filter(expense => expense.category === categoryId)
-              .sort(compareMovementDatesAscending)
+            const categoryExpenses = categoryReportDetails
+              .find(detail => detail.category.id === categoryId)?.movements || []
 
             return (
               <div
