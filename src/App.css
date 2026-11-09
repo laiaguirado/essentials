@@ -41,6 +41,56 @@ body {
   text-align: left;
 }
 
+.quick-movement-fields {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.quick-movement-fields > * {
+  min-width: 0;
+}
+
+.quick-movement-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-movement-recurrence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #495057;
+}
+
+.quick-movement-actions > button {
+  margin-left: auto;
+}
+
+.history-filter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, .85fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.history-filter-fields > * {
+  min-width: 0;
+}
+
+.history-date-filter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
 .finance-distribution-grid > div {
   min-width: 0;
 }
@@ -1301,6 +1351,20 @@ body {
 .reminders-page { padding: 42px clamp(16px, 5vw, 64px) !important; }.reminders-container { max-width: 960px !important; }.reminders-intro { color: #95898f !important; }.reminder-form { border: 1px solid #eee2e6 !important; border-radius: 17px !important; background: #fffdfd !important; box-shadow: 0 8px 22px #57374410 !important; }.reminder-form-actions button[type="submit"] { background: #e85d91 !important; }.reminder-category-switch, .reminder-inline-category button { color: #cf467a !important; }.reminders-list-header { align-items: end; }.reminders-list-header select { background: #fff !important; }.reminder-card, .reminders-empty { border: 1px solid #eee2e6 !important; border-radius: 13px !important; background: #fffdfd !important; box-shadow: 0 5px 15px #57374408; }.reminder-category { background: #fff0f5 !important; color: #cf467a !important; }.reminder-task input { accent-color: #e85d91 !important; }.reminder-edit { border-color: #eab4c8 !important; color: #cf467a !important; background: #fff8fa !important; }.reminder-delete { border-color: #edc2ce !important; }
 .finance-page { padding: 42px clamp(16px, 5vw, 64px) !important; max-width: none !important; }.finance-page h1, .finance-page h2, .finance-page h3 { color: #302b30; letter-spacing: -.035em; }.finance-summary-cards > div, .finance-distribution-grid > div, .finance-movement-card { border: 1px solid #eee2e6 !important; border-radius: 17px !important; background: #fffdfd !important; box-shadow: 0 8px 22px #57374410 !important; }.finance-page button { border-radius: 10px !important; }.finance-page input, .finance-page select { border-color: #eadde2 !important; border-radius: 10px !important; }.finance-page button[style*="4285f4"], .finance-page button[style*="28a745"], .finance-page button[style*="007bff"] { background: #e85d91 !important; }.finance-page button[style*="dc3545"] { background: #9d667c !important; }
 @media (max-width: 700px) { .workspace-links { grid-template-columns: 1fr; }.section-heading { align-items: flex-start; }.section-caption { display: none; }.tasks-page, .reminders-page, .finance-page { padding: 24px 16px !important; } }
+
+@media (max-width: 700px) {
+  .quick-movement-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-filter-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-filter-fields > input[type="search"] {
+    grid-column: 1 / -1;
+  }
+}
 
 /* Shared collapsible workspace navigation and the complete home dashboard. */
 .sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }.sidebar-toggle { display: grid; width: 28px; height: 28px; place-items: center; padding: 0; border: 1px solid #f0dfe6; border-radius: 8px; background: #fff; color: #cf467a; font-size: 14px; }.sidebar-toggle:hover { background: #fff0f5; }.dashboard-sidebar.is-collapsed { width: 82px; flex-basis: 82px; padding-right: 14px; padding-left: 14px; }.dashboard-sidebar.is-collapsed .brand { margin-right: 0; margin-left: 0; }.dashboard-sidebar.is-collapsed .brand-word, .dashboard-sidebar.is-collapsed .nav-label, .dashboard-sidebar.is-collapsed .nav-item b, .dashboard-sidebar.is-collapsed .sidebar-profile { display: none; }.dashboard-sidebar.is-collapsed .nav-item { justify-content: center; padding-right: 8px; padding-left: 8px; }.dashboard-sidebar.is-collapsed .nav-item span { width: auto; }.dashboard-sidebar.is-collapsed .sidebar-footer { justify-content: center; padding-right: 0; padding-left: 0; }.workspace-page-main { min-width: 0; }.workspace-page-main > .tasks-page, .workspace-page-main > .reminders-page, .workspace-page-main > .finance-page { min-height: auto !important; }
