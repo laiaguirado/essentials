@@ -1,4 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import PropTypes from 'prop-types'
 import { useUserData } from './auth/useUserData.js'
@@ -128,6 +129,7 @@ function getTimelineBuckets(movements, filterMonths, filterYears) {
 const PDF_CAPTURE_SCALE = 2
 const PDF_PAGE_CONTENT_HEIGHT_RATIO = 277 / 190
 const HISTORY_PAGE_SIZE = 100
+const FINANCE_WHATS_NEW_KEY = 'essentials-finance-whats-new-2026-11'
 
 const categories = [
   { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
@@ -411,6 +413,7 @@ function Expenses() {
   const [showMonthFilter, setShowMonthFilter] = useState(false)
   const [showYearFilter, setShowYearFilter] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+  const [showWhatsNew, setShowWhatsNew] = useState(false)
   const [showCategoryDistribution, setShowCategoryDistribution] = useState(false)
   const [showCategorySummary, setShowCategorySummary] = useState(false)
   const [showMovementTimeline, setShowMovementTimeline] = useState(true)
@@ -452,6 +455,27 @@ function Expenses() {
   const timelineType = selectedTimelineTypes.length > 1
     ? 'both'
     : selectedTimelineTypes[0] || 'none'
+
+  const closeWhatsNew = useCallback(() => {
+    localStorage.setItem(FINANCE_WHATS_NEW_KEY, 'seen')
+    setShowWhatsNew(false)
+  }, [])
+
+  useEffect(() => {
+    if (localStorage.getItem(FINANCE_WHATS_NEW_KEY) !== 'seen') {
+      setShowWhatsNew(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showWhatsNew) return undefined
+
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') closeWhatsNew()
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [showWhatsNew, closeWhatsNew])
 
   const toggleTimelineType = type => {
     setSelectedTimelineTypes(current => (
@@ -1351,9 +1375,93 @@ function Expenses() {
           ← Volver al Inicio
         </Link>
       </div>
-      <h1 style={{ color: '#333', marginBottom: '20px', textAlign: 'center' }}>
+      <h1 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', color: '#333', marginBottom: '20px', textAlign: 'left' }}>
+        <span>
           💰 Control de las finanzas
+        </span>
+        <button
+          type="button"
+          onClick={() => setShowWhatsNew(true)}
+          style={{ flex: '0 0 auto', padding: '10px 16px', border: '1px solid #218838', borderRadius: '8px', backgroundColor: 'white', color: '#18743a', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          ✨ Novedades
+        </button>
       </h1>
+
+      {showWhatsNew && createPortal(
+        <div
+          role="presentation"
+          onClick={closeWhatsNew}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '20px',
+            backgroundColor: 'rgba(32, 24, 28, 0.48)',
+            backdropFilter: 'blur(3px)'
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="finance-whats-new-title"
+            onClick={event => event.stopPropagation()}
+            style={{
+              width: 'min(820px, 100%)',
+              maxHeight: 'min(85vh, 720px)',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+              border: '1px solid #dcebe0',
+              borderRadius: '20px',
+              background: 'linear-gradient(145deg, #f8fff9, #ffffff 72%)',
+              boxShadow: '0 24px 70px rgba(32, 24, 28, 0.24)'
+            }}
+          >
+            <div style={{ maxHeight: 'calc(min(85vh, 720px) - 2px)', overflowY: 'auto', scrollbarGutter: 'stable', boxSizing: 'border-box', padding: '26px', marginRight: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '14px' }}>
+              <div>
+                <h2 id="finance-whats-new-title" style={{ margin: 0, color: '#24352a', fontSize: '23px' }}>✨ Novedades en Finanzas</h2>
+                <p style={{ margin: '7px 0 0', color: '#6c757d', fontSize: '14px' }}>Estas son las mejoras incluidas en la última actualización.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar novedades"
+                autoFocus
+                onClick={closeWhatsNew}
+                style={{ flex: '0 0 auto', padding: '0 4px', border: 0, background: 'transparent', color: '#6c757d', fontSize: '26px', lineHeight: 1, cursor: 'pointer' }}
+              >
+                ×
+              </button>
+            </div>
+            <ul style={{ display: 'grid', gap: '13px', margin: '22px 0', padding: 0, listStyle: 'none', color: '#495057', fontSize: '14px', lineHeight: 1.55 }}>
+              {[
+                ['📅 Filtros más flexibles', 'Selecciona varios meses y años. El gráfico refleja únicamente las combinaciones seleccionadas y etiqueta cada mes con su año.'],
+                ['📊 Gráfico mejorado', 'Activa gastos e ingresos por separado o juntos. Las columnas son más anchas y mantienen espacio entre ellas.'],
+                ['🔁 Movimientos recurrentes', 'Programa movimientos cada semana, cada mes o cada año.'],
+                ['🛡️ Más seguridad', 'Confirma antes de eliminar movimientos, metas o recurrencias, y revisa las fechas de movimientos muy futuros.'],
+                ['🧾 Formulario e historial', 'Los campos de añadir movimientos y los filtros del historial se muestran de forma más compacta; el historial también distingue ingresos y gastos con iconos.'],
+                ['✨ Novedades siempre a mano', 'Se ha añadido este pop-up para consultar las últimas mejoras de Finanzas; puedes volver a abrirlo con el botón «Novedades».']
+              ].map(([title, description]) => (
+                <li key={title} style={{ padding: '12px 14px', borderRadius: '12px', backgroundColor: '#f4f8f5' }}>
+                  <strong style={{ display: 'block', marginBottom: '3px', color: '#2f5039' }}>{title}</strong>
+                  {description}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={closeWhatsNew}
+              style={{ display: 'block', marginLeft: 'auto', padding: '10px 18px', border: 0, borderRadius: '10px', backgroundColor: '#218838', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              ¡Entendido!
+            </button>
+            </div>
+          </section>
+        </div>,
+        document.body
+      )}
 
       {/* Global Month Filter */}
       <div style={{ 
