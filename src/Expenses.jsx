@@ -950,6 +950,14 @@ function Expenses() {
     setEditingSavingsGoalId(null)
   }
 
+  const getGoalMovements = (goal) => expenses.filter(expense => (
+    goalAccountMovementCategories.has(expense.category)
+    && (
+      expense.goalId === goal.id
+      || String(expense.description).includes(`: ${goal.name} (`)
+    )
+  ))
+
   const deleteExpense = (id) => {
     const expense = expenses.find(item => item.id === id)
     if (expense && goalAccountMovementCategories.has(expense.category) && !deletableGoalTransferCategories.has(expense.category)) return
@@ -963,7 +971,10 @@ function Expenses() {
       return
     }
     if (goalIdToDelete !== null) {
+      const goal = savingsGoals.find(item => item.id === goalIdToDelete)
+      const goalMovementIds = new Set(goal ? getGoalMovements(goal).map(expense => expense.id) : [])
       setSavingsGoals(currentGoals => currentGoals.filter(goal => goal.id !== goalIdToDelete))
+      setExpenses(currentExpenses => currentExpenses.filter(expense => !goalMovementIds.has(expense.id)))
       setGoalIdToDelete(null)
       return
     }
@@ -1614,6 +1625,8 @@ function Expenses() {
       ? 1
       : Math.max(1, Math.ceil(movementTimeline.length / 20))
   const expensePendingDeletion = expenses.find(expense => expense.id === expenseIdToDelete)
+  const goalPendingDeletion = savingsGoals.find(goal => goal.id === goalIdToDelete)
+  const goalPendingMovementCount = goalPendingDeletion ? getGoalMovements(goalPendingDeletion).length : 0
 
   return (
     <div className="finance-page" style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
@@ -3765,6 +3778,11 @@ function Expenses() {
                   ? '¿Eliminar movimiento recurrente?'
                   : '¿Eliminar movimiento?'}
             </h2>
+            {goalPendingDeletion && (
+              <p style={{ margin: '0 0 10px', color: '#b42318', fontSize: '14px', lineHeight: 1.6, fontWeight: 700 }}>
+                Se eliminará la meta y sus {goalPendingMovementCount} movimientos vinculados (saldo inicial, aportaciones y retiradas). Esta acción no se puede deshacer.
+              </p>
+            )}
             {expensePendingDeletion && goalAccountMovementCategories.has(expensePendingDeletion.category) && (
               <p style={{ margin: '0 0 10px', color: '#b42318', fontSize: '14px', lineHeight: 1.6, fontWeight: 700 }}>
                 Se eliminarán los movimientos de la Cuenta general y de la Cuenta de metas, y se ajustará el saldo de la meta.
