@@ -4,8 +4,28 @@ import { Link } from 'react-router-dom'
 import PropTypes from 'prop-types'
 import { useUserData } from './auth/useUserData.js'
 
+const currencyFormatter = new Intl.NumberFormat('es-ES', {
+  useGrouping: 'always',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+})
+const numberFormatter = new Intl.NumberFormat('es-ES', { useGrouping: 'always' })
+const percentageFormatter = new Intl.NumberFormat('es-ES', {
+  useGrouping: 'always',
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1
+})
+
 function formatCurrency(amount) {
-  return `${Number(amount).toFixed(2)} €`
+  return `${currencyFormatter.format(Number(amount))} €`
+}
+
+function formatNumber(number) {
+  return numberFormatter.format(number)
+}
+
+function formatPercentage(number) {
+  return percentageFormatter.format(number)
 }
 
 function compareMovementDatesAscending(first, second) {
@@ -129,7 +149,15 @@ function getTimelineBuckets(movements, filterMonths, filterYears) {
 const PDF_CAPTURE_SCALE = 2
 const PDF_PAGE_CONTENT_HEIGHT_RATIO = 277 / 190
 const HISTORY_PAGE_SIZE = 100
-const FINANCE_WHATS_NEW_KEY = 'essentials-finance-whats-new-2026-11'
+const FINANCE_WHATS_NEW_KEY = 'essentials-finance-whats-new-2026-11-goal-transfers-and-locale-v2'
+const financeWhatsNewItems = [
+  ['📊 Totales sin filtros', 'Los totales de Cuenta general y Cuenta de metas se muestran antes del filtro y representan siempre todos los periodos.'],
+  ['🎯 Transferencias de metas', 'Las aportaciones, retiradas y saldos iniciales quedan registrados como movimientos vinculados entre la Cuenta general y la Cuenta de metas.'],
+  ['✏️ Edición conjunta', 'Puedes editar una aportación o retirada y confirmar la modificación de los dos movimientos a la vez, manteniendo actualizado el saldo de la meta.'],
+  ['🗑️ Eliminación conjunta', 'Al eliminar una aportación, retirada o saldo inicial, se borran los movimientos de ambas cuentas y se revierte el saldo correspondiente.'],
+  ['🛡️ Confirmaciones más claras', 'Los diálogos explican cuándo una acción afecta a las dos cuentas y requieren confirmación antes de modificar o eliminar movimientos.'],
+  ['🔢 Formato numérico español', 'Las cifras se muestran con puntos para los miles y comas para los decimales, siguiendo el sistema español.']
+]
 
 const categories = [
   { id: 'general', name: 'General', color: '#6c757d', brightColor: '#868e96', icon: '📦' },
@@ -150,7 +178,47 @@ const incomeCategories = [
   { id: 'sales', name: 'Ventas', color: '#845ec2', brightColor: '#a27de0', icon: '🛍️' },
   { id: 'other-income', name: 'Otros ingresos', color: '#ff9f40', brightColor: '#ffb366', icon: '💰' }
 ]
-const allCategories = [...categories, ...incomeCategories]
+const goalContributionExpenseCategory = { id: 'goal-contribution', name: 'Aportación a meta', color: '#5b7cfa', brightColor: '#8098ff', icon: '🎯' }
+const goalContributionIncomeCategory = { id: 'goal-deposit', name: 'Aportación recibida por metas', color: '#5b7cfa', brightColor: '#8098ff', icon: '🎯' }
+const goalWithdrawalExpenseCategory = { id: 'goal-withdrawal-expense', name: 'Retirada de metas', color: '#20a39e', brightColor: '#40c4b5', icon: '🎯' }
+const goalWithdrawalIncomeCategory = { id: 'goal-withdrawal', name: 'Retirada de meta', color: '#20a39e', brightColor: '#40c4b5', icon: '🎯' }
+const goalOpeningExpenseCategory = { id: 'goal-opening-transfer', name: 'Saldo inicial transferido a metas', color: '#5b7cfa', brightColor: '#8098ff', icon: '🎯' }
+const goalOpeningIncomeCategory = { id: 'goal-opening', name: 'Saldo inicial de metas', color: '#5b7cfa', brightColor: '#8098ff', icon: '🎯' }
+const goalAccountMovementCategories = new Set([
+  goalContributionExpenseCategory.id,
+  goalContributionIncomeCategory.id,
+  goalWithdrawalExpenseCategory.id,
+  goalWithdrawalIncomeCategory.id,
+  goalOpeningExpenseCategory.id,
+  goalOpeningIncomeCategory.id
+])
+const deletableGoalTransferCategories = new Set([
+  goalContributionExpenseCategory.id,
+  goalContributionIncomeCategory.id,
+  goalWithdrawalExpenseCategory.id,
+  goalWithdrawalIncomeCategory.id,
+  goalOpeningExpenseCategory.id,
+  goalOpeningIncomeCategory.id
+])
+const editableGoalTransferCategories = new Set([
+  goalContributionExpenseCategory.id,
+  goalContributionIncomeCategory.id,
+  goalWithdrawalExpenseCategory.id,
+  goalWithdrawalIncomeCategory.id
+])
+const reportExpenseCategories = [
+  ...categories,
+  goalContributionExpenseCategory,
+  goalWithdrawalExpenseCategory,
+  goalOpeningExpenseCategory
+]
+const reportIncomeCategories = [
+  ...incomeCategories,
+  goalContributionIncomeCategory,
+  goalWithdrawalIncomeCategory,
+  goalOpeningIncomeCategory
+]
+const allCategories = [...reportExpenseCategories, ...reportIncomeCategories]
 const categoriesById = new Map(allCategories.map(category => [category.id, category]))
 
 const QuickAddMovementForm = memo(function QuickAddMovementForm({ onSave }) {
@@ -435,6 +503,7 @@ function Expenses() {
   const [selectedDistributionCategory, setSelectedDistributionCategory] = useState(null)
   const [editingExpenseId, setEditingExpenseId] = useState(null)
   const [editingValues, setEditingValues] = useState(null)
+  const [goalEditConfirmation, setGoalEditConfirmation] = useState(null)
   const [expenseIdToDelete, setExpenseIdToDelete] = useState(null)
   const [goalIdToDelete, setGoalIdToDelete] = useState(null)
   const [recurringIdToDelete, setRecurringIdToDelete] = useState(null)
@@ -638,6 +707,8 @@ function Expenses() {
   }, [setExpenses, setRecurringMovements])
 
   const editExpense = (expense) => {
+    if (goalAccountMovementCategories.has(expense.category) && !editableGoalTransferCategories.has(expense.category)) return
+
     const [day, month, year] = expense.date.split('/')
     setEditingValues({
       description: expense.description,
@@ -667,6 +738,12 @@ function Expenses() {
       date: new Date(editingValues.date + 'T00:00:00').toLocaleDateString('es-ES')
     }
 
+    const currentExpense = expenses.find(expense => expense.id === editingExpenseId)
+    if (currentExpense && editableGoalTransferCategories.has(currentExpense.category)) {
+      setGoalEditConfirmation({ expenseId: editingExpenseId, values: updatedExpense })
+      return
+    }
+
     setExpenses(currentExpenses => currentExpenses.map(expense =>
       expense.id === editingExpenseId ? { ...expense, ...updatedExpense } : expense
     ))
@@ -674,9 +751,53 @@ function Expenses() {
     setEditingValues(null)
   }
 
+  const confirmGoalEdit = () => {
+    if (!goalEditConfirmation) return
+
+    const { expenseId, values } = goalEditConfirmation
+    const expense = expenses.find(item => item.id === expenseId)
+    if (!expense) return
+
+    const transferId = expense.transferId || String(expense.id).replace(/-(general|goals)$/, '')
+    const relatedMovements = expenses.filter(item => (
+      item.transferId === transferId || String(item.id).replace(/-(general|goals)$/, '') === transferId
+    ))
+    const goalId = expense.goalId
+      || relatedMovements.find(item => item.goalId)?.goalId
+      || savingsGoals.find(goal => expense.description.includes(`: ${goal.name} (`))?.id
+    const oldAmount = Number(expense.amount)
+    const newAmount = Number(values.amount)
+    const amountDifference = newAmount - oldAmount
+    const isContribution = expense.category === goalContributionExpenseCategory.id || expense.category === goalContributionIncomeCategory.id
+    const descriptionBase = String(values.description).replace(/\s+\(Cuenta (general|metas)\)$/, '')
+
+    setExpenses(currentExpenses => currentExpenses.map(item => {
+      const isRelated = item.transferId === transferId || String(item.id).replace(/-(general|goals)$/, '') === transferId
+      if (!isRelated) return item
+      const accountLabel = item.account === 'goals' ? 'Cuenta metas' : 'Cuenta general'
+      return {
+        ...item,
+        amount: newAmount,
+        date: values.date,
+        description: `${descriptionBase} (${accountLabel})`
+      }
+    }))
+    if (goalId && Number.isFinite(amountDifference)) {
+      setSavingsGoals(currentGoals => currentGoals.map(goal => (
+        goal.id === goalId
+          ? { ...goal, saved: Math.max(0, Number(goal.saved) + (isContribution ? amountDifference : -amountDifference)) }
+          : goal
+      )))
+    }
+    setGoalEditConfirmation(null)
+    setEditingExpenseId(null)
+    setEditingValues(null)
+  }
+
   const cancelInlineEdit = () => {
     setEditingExpenseId(null)
     setEditingValues(null)
+    setGoalEditConfirmation(null)
   }
 
   const saveSavingsGoal = (event) => {
@@ -685,12 +806,42 @@ function Expenses() {
     const saved = Number(goalSaved || 0)
     if (!goalName.trim() || !Number.isFinite(target) || target <= 0 || !Number.isFinite(saved) || saved < 0) return
 
+    const goalId = `goal-${Date.now()}`
     setSavingsGoals(current => [...current, {
-      id: `goal-${Date.now()}`,
+      id: goalId,
       name: goalName.trim(),
       target,
       saved
     }])
+    if (saved > 0) {
+      const transferId = `goal-opening-${goalId}-${Date.now()}`
+      const date = new Date().toLocaleDateString('es-ES')
+      setExpenses(current => [
+        ...current,
+        {
+          id: `${transferId}-general`,
+          description: `Saldo inicial de meta: ${goalName.trim()} (Cuenta general)`,
+          amount: saved,
+          category: goalOpeningExpenseCategory.id,
+          transferId,
+          goalId,
+          type: 'expense',
+          account: 'general',
+          date
+        },
+        {
+          id: `${transferId}-goals`,
+          description: `Saldo inicial de meta: ${goalName.trim()} (Cuenta metas)`,
+          amount: saved,
+          category: goalOpeningIncomeCategory.id,
+          transferId,
+          goalId,
+          type: 'income',
+          account: 'goals',
+          date
+        }
+      ])
+    }
     setGoalName('')
     setGoalTarget('')
     setGoalSaved('')
@@ -700,9 +851,39 @@ function Expenses() {
     const contribution = Number(goalContributions[goalId])
     if (!Number.isFinite(contribution) || contribution <= 0) return
 
+    const goal = savingsGoals.find(item => item.id === goalId)
+    if (!goal) return
+
+    const transferId = `goal-contribution-${goalId}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const date = new Date().toLocaleDateString('es-ES')
     setSavingsGoals(current => current.map(goal => (
       goal.id === goalId ? { ...goal, saved: Number(goal.saved) + contribution } : goal
     )))
+    setExpenses(current => [
+      ...current,
+      {
+        id: `${transferId}-general`,
+        description: `Aportación a meta: ${goal.name} (Cuenta general)`,
+        amount: contribution,
+        category: goalContributionExpenseCategory.id,
+        transferId,
+        goalId,
+        type: 'expense',
+        account: 'general',
+        date
+      },
+      {
+        id: `${transferId}-goals`,
+        description: `Aportación a meta: ${goal.name} (Cuenta metas)`,
+        amount: contribution,
+        category: goalContributionIncomeCategory.id,
+        transferId,
+        goalId,
+        type: 'income',
+        account: 'goals',
+        date
+      }
+    ])
     setGoalActionErrors(current => ({ ...current, [goalId]: '' }))
     setGoalContributions(current => ({ ...current, [goalId]: '' }))
   }
@@ -715,9 +896,36 @@ function Expenses() {
       return
     }
 
+    const transferId = `goal-withdrawal-${goal.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const date = new Date().toLocaleDateString('es-ES')
     setSavingsGoals(current => current.map(item => (
       item.id === goal.id ? { ...item, saved: Number(item.saved) - contribution } : item
     )))
+    setExpenses(current => [
+      ...current,
+      {
+        id: `${transferId}-general`,
+        description: `Retirada de meta: ${goal.name} (Cuenta general)`,
+        amount: contribution,
+        category: goalWithdrawalIncomeCategory.id,
+        transferId,
+        goalId: goal.id,
+        type: 'income',
+        account: 'general',
+        date
+      },
+      {
+        id: `${transferId}-goals`,
+        description: `Retirada de meta: ${goal.name} (Cuenta metas)`,
+        amount: contribution,
+        category: goalWithdrawalExpenseCategory.id,
+        transferId,
+        goalId: goal.id,
+        type: 'expense',
+        account: 'goals',
+        date
+      }
+    ])
     setGoalActionErrors(current => ({ ...current, [goal.id]: '' }))
     setGoalContributions(current => ({ ...current, [goal.id]: '' }))
   }
@@ -743,6 +951,8 @@ function Expenses() {
   }
 
   const deleteExpense = (id) => {
+    const expense = expenses.find(item => item.id === id)
+    if (expense && goalAccountMovementCategories.has(expense.category) && !deletableGoalTransferCategories.has(expense.category)) return
     setExpenseIdToDelete(id)
   }
 
@@ -758,7 +968,40 @@ function Expenses() {
       return
     }
     if (expenseIdToDelete === null) return
-    setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== expenseIdToDelete))
+    const expense = expenses.find(item => item.id === expenseIdToDelete)
+    if (expense && deletableGoalTransferCategories.has(expense.category)) {
+      const transferId = expense.transferId || String(expense.id).replace(/-(general|goals)$/, '')
+      const descriptionBase = String(expense.description).replace(/\s+\(Cuenta (general|metas)\)$/, '')
+      const relatedMovements = expenses.filter(item => (
+        item.transferId === transferId
+        || String(item.id).replace(/-(general|goals)$/, '') === transferId
+        || (
+          item.id !== expense.id
+          && goalAccountMovementCategories.has(item.category)
+          && item.account !== expense.account
+          && Number(item.amount) === Number(expense.amount)
+          && item.date === expense.date
+          && String(item.description).replace(/\s+\(Cuenta (general|metas)\)$/, '') === descriptionBase
+        )
+      ))
+      const relatedIds = new Set([expense.id, ...relatedMovements.map(item => item.id)])
+      const goalId = expense.goalId
+        || relatedMovements.find(item => item.goalId)?.goalId
+        || savingsGoals.find(goal => expense.description.includes(`: ${goal.name} (`))?.id
+      const amount = Number(expense.amount)
+      const isWithdrawal = expense.category === goalWithdrawalExpenseCategory.id || expense.category === goalWithdrawalIncomeCategory.id
+
+      setExpenses(currentExpenses => currentExpenses.filter(item => !relatedIds.has(item.id)))
+      if (goalId && Number.isFinite(amount)) {
+        setSavingsGoals(currentGoals => currentGoals.map(goal => (
+          goal.id === goalId
+            ? { ...goal, saved: Math.max(0, Number(goal.saved) + (isWithdrawal ? amount : -amount)) }
+            : goal
+        )))
+      }
+    } else {
+      setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== expenseIdToDelete))
+    }
     setExpenseIdToDelete(null)
   }
 
@@ -797,6 +1040,18 @@ function Expenses() {
 
     return totals
   }, [filteredExpensesByDate])
+  const { generalAccountBalance, goalsAccountBalance } = useMemo(() => {
+    const balances = expenses.reduce((totals, movement) => {
+      const account = movement.account === 'goals' ? 'goals' : 'general'
+      const sign = movement.type === 'income' ? 1 : -1
+      totals[account] += sign * (Number(movement.amount) || 0)
+      return totals
+    }, { general: 0, goals: 0 })
+    return {
+      generalAccountBalance: balances.general,
+      goalsAccountBalance: balances.goals
+    }
+  }, [expenses])
   const movementTimeline = useMemo(
     () => getTimelineBuckets(filteredExpensesByDate, filterMonths, filterYears),
     [filteredExpensesByDate, filterMonths, filterYears]
@@ -806,14 +1061,14 @@ function Expenses() {
   const categoryReportRows = useMemo(() => allCategories.map(cat => ({
     ...cat,
     total: categoryTotals[cat.id] || 0,
-    isIncome: incomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
+    isIncome: reportIncomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
   })), [categoryTotals])
   const categoryReportDetails = useMemo(() => selectedSummaryCategories
     .map(categoryId => {
       const selectedCategory = allCategories.find(cat => cat.id === categoryId)
       if (!selectedCategory) return null
 
-      const isIncome = incomeCategories.some(cat => cat.id === categoryId)
+      const isIncome = reportIncomeCategories.some(cat => cat.id === categoryId)
       const movements = filteredExpensesByDate
         .filter(expense => (
           expense.category === categoryId &&
@@ -1031,7 +1286,9 @@ function Expenses() {
 
   const budgetExpenses = useMemo(() => expenses.filter(expense => {
     const [, month, year] = expense.date.split('/')
-    return expense.type !== 'income' && `${year}-${month.padStart(2, '0')}` === budgetMonth
+    return expense.type !== 'income' &&
+      expense.account !== 'goals' &&
+      `${year}-${month.padStart(2, '0')}` === budgetMonth
   }), [expenses, budgetMonth])
   const budgetSpentByCategory = useMemo(() => {
     const totals = Object.fromEntries(categories.map(cat => [cat.id, 0]))
@@ -1095,7 +1352,7 @@ function Expenses() {
     let fromDate
     let toDate
     const categoryIsIncome = timelineType === 'income' ||
-      (timelineType === 'both' && incomeCategories.some(category => category.id === categoryId))
+      (timelineType === 'both' && reportIncomeCategories.some(category => category.id === categoryId))
     if (filterMonths.length > 0 && filterYears.length !== 1) {
       const [year, month] = bucket.key.split('-').map(Number)
       const dayCount = new Date(year, month, 0).getDate()
@@ -1249,15 +1506,15 @@ function Expenses() {
   }, [expenses])
 
   const chartCategoryTotals = useMemo(() => Object.fromEntries(
-    categories.map(cat => [cat.id, categoryTotals[cat.id]])
+    reportExpenseCategories.map(cat => [cat.id, categoryTotals[cat.id]])
   ), [categoryTotals])
   const chartTotal = Object.values(chartCategoryTotals).reduce((sum, amount) => sum + amount, 0)
   const incomeCategoryTotals = useMemo(() => Object.fromEntries(
-    incomeCategories.map(cat => [cat.id, categoryTotals[cat.id]])
+    reportIncomeCategories.map(cat => [cat.id, categoryTotals[cat.id]])
   ), [categoryTotals])
   const selectedDistributionCategories = selectedDistributionCategory?.type === 'income'
-    ? incomeCategories
-    : categories
+    ? reportIncomeCategories
+    : reportExpenseCategories
   const selectedDistributionDetails = useMemo(() => selectedDistributionCategory
     ? {
         category: selectedDistributionCategories.find(cat => cat.id === selectedDistributionCategory.id),
@@ -1310,13 +1567,13 @@ function Expenses() {
   const timelineSeriesColor = timelineType === 'income' ? '#28a745' : timelineType === 'both' ? '#495057' : '#dc5968'
   const timelineDetailSeries = timelineType === 'both'
     ? [
-        { type: 'expense', label: 'Gastos', series: 'expenses', countKey: 'expenseCount', categoryKey: 'expenseCategories', color: '#dc5968', icon: '💸', categories },
-        { type: 'income', label: 'Ingresos', series: 'income', countKey: 'incomeCount', categoryKey: 'incomeCategories', color: '#28a745', icon: '💰', categories: incomeCategories }
+        { type: 'expense', label: 'Gastos', series: 'expenses', countKey: 'expenseCount', categoryKey: 'expenseCategories', color: '#dc5968', icon: '💸', categories: reportExpenseCategories },
+        { type: 'income', label: 'Ingresos', series: 'income', countKey: 'incomeCount', categoryKey: 'incomeCategories', color: '#28a745', icon: '💰', categories: reportIncomeCategories }
       ]
     : timelineType === 'income'
-      ? [{ type: 'income', label: 'Ingresos', series: 'income', countKey: 'incomeCount', categoryKey: 'incomeCategories', color: '#28a745', icon: '💰', categories: incomeCategories }]
+      ? [{ type: 'income', label: 'Ingresos', series: 'income', countKey: 'incomeCount', categoryKey: 'incomeCategories', color: '#28a745', icon: '💰', categories: reportIncomeCategories }]
       : timelineType === 'expense'
-        ? [{ type: 'expense', label: 'Gastos', series: 'expenses', countKey: 'expenseCount', categoryKey: 'expenseCategories', color: '#dc5968', icon: '💸', categories }]
+        ? [{ type: 'expense', label: 'Gastos', series: 'expenses', countKey: 'expenseCount', categoryKey: 'expenseCategories', color: '#dc5968', icon: '💸', categories: reportExpenseCategories }]
         : []
   const hoveredTimelineBucket = movementTimeline.find(bucket => bucket.key === hoveredTimelinePeriod) ||
     movementTimeline.find(bucket => bucket.key === selectedTimelinePeriod)
@@ -1356,6 +1613,7 @@ function Expenses() {
     : filterMonths.length === 1
       ? 1
       : Math.max(1, Math.ceil(movementTimeline.length / 20))
+  const expensePendingDeletion = expenses.find(expense => expense.id === expenseIdToDelete)
 
   return (
     <div className="finance-page" style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
@@ -1436,10 +1694,17 @@ function Expenses() {
               </button>
             </div>
             <ul style={{ display: 'grid', gap: '13px', margin: '22px 0', padding: 0, listStyle: 'none', color: '#495057', fontSize: '14px', lineHeight: 1.55 }}>
+              {financeWhatsNewItems.map(([title, description]) => (
+                <li key={title} style={{ padding: '12px 14px', borderRadius: '12px', backgroundColor: '#f4f8f5' }}>
+                  <strong style={{ display: 'block', marginBottom: '3px', color: '#2f5039' }}>{title}</strong>
+                  {description}
+                </li>
+              ))}
+            </ul>
+            <ul style={{ display: 'none' }}>
               {[
                 ['📅 Filtros más flexibles', 'Selecciona varios meses y años. El gráfico refleja únicamente las combinaciones seleccionadas y etiqueta cada mes con su año.'],
                 ['📊 Gráfico mejorado', 'Activa gastos e ingresos por separado o juntos. Las columnas son más anchas y mantienen espacio entre ellas.'],
-                ['🔁 Movimientos recurrentes', 'Programa movimientos cada semana, cada mes o cada año.'],
                 ['🛡️ Más seguridad', 'Confirma antes de eliminar movimientos, metas o recurrencias, y revisa las fechas de movimientos muy futuros.'],
                 ['🧾 Formulario e historial', 'Los campos de añadir movimientos y los filtros del historial se muestran de forma más compacta; el historial también distingue ingresos y gastos con iconos.'],
                 ['✨ Novedades siempre a mano', 'Se ha añadido este pop-up para consultar las últimas mejoras de Finanzas; puedes volver a abrirlo con el botón «Novedades».']
@@ -1462,6 +1727,23 @@ function Expenses() {
         </div>,
         document.body
       )}
+
+      <section aria-labelledby="account-totals-title" style={{ marginBottom: '20px' }}>
+        <div className="finance-account-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+          <div style={{ backgroundColor: '#eef5ff', color: '#245eb5', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
+            <div style={{ fontSize: '15px' }}>🏦 Cuenta general</div>
+            <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px', color: generalAccountBalance < 0 ? '#b42318' : '#18743a' }}>
+              {generalAccountBalance < 0 ? '−' : ''}{formatCurrency(Math.abs(generalAccountBalance))}
+            </strong>
+          </div>
+          <div style={{ backgroundColor: '#f4f0ff', color: '#6953a3', padding: '16px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }}>
+            <div style={{ fontSize: '15px' }}>🎯 Cuenta de metas</div>
+            <strong style={{ display: 'block', marginTop: '4px', fontSize: '26px', color: goalsAccountBalance < 0 ? '#b42318' : '#18743a' }}>
+              {goalsAccountBalance < 0 ? '−' : ''}{formatCurrency(Math.abs(goalsAccountBalance))}
+            </strong>
+          </div>
+        </div>
+      </section>
 
       {/* Global Month Filter */}
       <div style={{ 
@@ -1877,8 +2159,8 @@ function Expenses() {
                       tabIndex={0}
                       aria-pressed={selectedTimelinePeriod === bucket.key}
                       aria-label={timelineType === 'both'
-                        ? `${bucket.label}: ${bucket.incomeCount} ingresos, ${formatCurrency(bucket.income)}; ${bucket.expenseCount} gastos, ${formatCurrency(bucket.expenses)}`
-                        : `${bucket.label}: ${bucket[timelineCountKey]} ${timelineSeriesLabel.toLowerCase()}, ${formatCurrency(bucket[timelineSeries])}`}
+                        ? `${bucket.label}: ${formatNumber(bucket.incomeCount)} ingresos, ${formatCurrency(bucket.income)}; ${formatNumber(bucket.expenseCount)} gastos, ${formatCurrency(bucket.expenses)}`
+                        : `${bucket.label}: ${formatNumber(bucket[timelineCountKey])} ${timelineSeriesLabel.toLowerCase()}, ${formatCurrency(bucket[timelineSeries])}`}
                       onMouseEnter={() => {
                         setHoveredTimelinePeriod(bucket.key)
                         if (selectedTimelinePeriod !== null) setSelectedTimelinePeriod(bucket.key)
@@ -1994,7 +2276,7 @@ function Expenses() {
                     return (
                       <section key={series.type} aria-label={`Detalle de ${series.label.toLowerCase()}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', color: series.color }}>
-                          <strong>{series.icon} {series.label} · {count} {count === 1 ? 'movimiento' : 'movimientos'}</strong>
+                          <strong>{series.icon} {series.label} · {formatNumber(count)} {count === 1 ? 'movimiento' : 'movimientos'}</strong>
                           <strong style={{ fontSize: '18px', whiteSpace: 'nowrap' }}>{formatCurrency(hoveredTimelineBucket[series.series])}</strong>
                         </div>
                         {count === 0 ? (
@@ -2035,7 +2317,7 @@ function Expenses() {
                                         {formatCurrency(categoryTotal.amount)}
                                       </strong>
                                       <span style={{ gridColumn: '2 / 4', gridRow: '2', color: '#7b8794', fontSize: '12px', lineHeight: '16px', whiteSpace: 'nowrap' }}>
-                                        {categoryTotal.count} {categoryTotal.count === 1 ? 'movimiento' : 'movimientos'}
+                                        {formatNumber(categoryTotal.count)} {categoryTotal.count === 1 ? 'movimiento' : 'movimientos'}
                                       </span>
                                     </button>
                                   </li>
@@ -2087,7 +2369,7 @@ function Expenses() {
             width: '250px', 
             height: '250px', 
             borderRadius: '50%', 
-            background: getPieChartGradient(categories, chartCategoryTotals, chartTotal),
+            background: getPieChartGradient(reportExpenseCategories, chartCategoryTotals, chartTotal),
             boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
             position: 'relative',
             transition: 'all 0.3s ease'
@@ -2107,13 +2389,13 @@ function Expenses() {
               alignItems: 'center',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}>
-              {categories.some(category => category.id === hoveredCategory) ? (
+              {reportExpenseCategories.some(category => category.id === hoveredCategory) ? (
                 <>
                   <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '5px' }}>
-                    {categories.find(c => c.id === hoveredCategory)?.icon} {categories.find(c => c.id === hoveredCategory)?.name}
+                    {reportExpenseCategories.find(c => c.id === hoveredCategory)?.icon} {reportExpenseCategories.find(c => c.id === hoveredCategory)?.name}
                   </div>
                   <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>
-                    {chartTotal === 0 ? '0.0' : ((chartCategoryTotals[hoveredCategory] / chartTotal) * 100).toFixed(1)}%
+                    {formatPercentage(chartTotal === 0 ? 0 : (chartCategoryTotals[hoveredCategory] / chartTotal) * 100)}%
                   </div>
                 </>
               ) : (
@@ -2127,10 +2409,10 @@ function Expenses() {
           
           {/* Legend */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px', width: '100%' }}>
-            {categories.map(cat => {
+            {reportExpenseCategories.map(cat => {
               const total = chartCategoryTotals[cat.id]
               if (total === 0) return null
-              const percentage = chartTotal === 0 ? 0 : ((total / chartTotal) * 100).toFixed(1)
+              const percentage = formatPercentage(chartTotal === 0 ? 0 : (total / chartTotal) * 100)
               return (
                 <button
                   type="button"
@@ -2184,7 +2466,7 @@ function Expenses() {
               height: '250px',
               maxWidth: '100%',
               borderRadius: '50%',
-              background: getPieChartGradient(incomeCategories, incomeCategoryTotals, incomeTotal),
+              background: getPieChartGradient(reportIncomeCategories, incomeCategoryTotals, incomeTotal),
               boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
               position: 'relative'
             }}>
@@ -2206,13 +2488,13 @@ function Expenses() {
                 padding: '8px',
                 boxSizing: 'border-box'
               }}>
-                {incomeCategories.some(cat => cat.id === hoveredCategory) ? (
+                {reportIncomeCategories.some(cat => cat.id === hoveredCategory) ? (
                   <>
                     <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '5px' }}>
-                      {incomeCategories.find(cat => cat.id === hoveredCategory)?.icon} {incomeCategories.find(cat => cat.id === hoveredCategory)?.name}
+                      {reportIncomeCategories.find(cat => cat.id === hoveredCategory)?.icon} {reportIncomeCategories.find(cat => cat.id === hoveredCategory)?.name}
                     </div>
                     <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333' }}>
-                      {incomeTotal === 0 ? '0.0' : ((incomeCategoryTotals[hoveredCategory] / incomeTotal) * 100).toFixed(1)}%
+                      {formatPercentage(incomeTotal === 0 ? 0 : (incomeCategoryTotals[hoveredCategory] / incomeTotal) * 100)}%
                     </div>
                   </>
                 ) : (
@@ -2224,10 +2506,10 @@ function Expenses() {
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px', width: '100%' }}>
-              {incomeCategories.map(cat => {
+              {reportIncomeCategories.map(cat => {
                 const total = incomeCategoryTotals[cat.id]
                 if (total === 0) return null
-                const percentage = ((total / incomeTotal) * 100).toFixed(1)
+                const percentage = formatPercentage((total / incomeTotal) * 100)
                 return (
                   <button
                     type="button"
@@ -2322,7 +2604,7 @@ function Expenses() {
                             onChange={event => setEditingValues(current => ({ ...current, category: event.target.value }))}
                             style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                           >
-                            {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                            {(editingValues.type === 'income' ? reportIncomeCategories : reportExpenseCategories).map(option => (
                               <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
                             ))}
                           </select>
@@ -2372,14 +2654,17 @@ function Expenses() {
                           <button
                             type="button"
                             onClick={() => editExpense(expense)}
+                            disabled={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id}
+                            title={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'Los saldos iniciales no se pueden editar.' : undefined}
                             aria-label={`Editar movimiento: ${expense.description}`}
-                            style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
+                            style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'not-allowed' : 'pointer', opacity: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 0.5 : 1 }}
                           >
                             ✏️
                           </button>
                           <button
                             type="button"
                             onClick={() => deleteExpense(expense.id)}
+                            title={goalAccountMovementCategories.has(expense.category) ? 'Se eliminarán los movimientos de ambas cuentas.' : undefined}
                             aria-label={`Eliminar movimiento: ${expense.description}`}
                             style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
                           >
@@ -2695,7 +2980,7 @@ function Expenses() {
                           onChange={event => setEditingValues(current => ({ ...current, category: event.target.value }))}
                           style={{ minWidth: 0, padding: '10px', border: '1px solid #ddd', borderRadius: '6px' }}
                         >
-                          {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                          {(editingValues.type === 'income' ? reportIncomeCategories : reportExpenseCategories).map(option => (
                             <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
                           ))}
                         </select>
@@ -2741,14 +3026,17 @@ function Expenses() {
                         <button
                           type="button"
                           onClick={() => editExpense(expense)}
+                            disabled={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id}
+                          title={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'Los saldos iniciales no se pueden editar.' : undefined}
                           aria-label={`Editar gasto: ${expense.description}`}
-                          style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
+                          style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'not-allowed' : 'pointer', opacity: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 0.5 : 1 }}
                         >
                           ✏️
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteExpense(expense.id)}
+                          title={goalAccountMovementCategories.has(expense.category) ? 'Se eliminarán los movimientos de ambas cuentas.' : undefined}
                           aria-label={`Eliminar gasto: ${expense.description}`}
                           style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer' }}
                         >
@@ -2958,7 +3246,7 @@ function Expenses() {
           {allCategories.map(cat => {
             const total = getCategoryTotal(cat.id)
             const isSelected = selectedSummaryCategories.includes(cat.id)
-            const isIncome = incomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
+            const isIncome = reportIncomeCategories.some(incomeCategory => incomeCategory.id === cat.id)
             return (
               <button
                 type="button"
@@ -3012,7 +3300,7 @@ function Expenses() {
                 style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px', borderRadius: '8px', backgroundColor: '#f8f9fa' }}
               >
                 <strong style={{ color: '#333', marginBottom: '4px' }}>
-                  {selectedCategory?.icon} {selectedCategory?.name}: {incomeCategories.some(cat => cat.id === categoryId) ? 'ingresos' : 'gastos'} registrados
+                  {selectedCategory?.icon} {selectedCategory?.name}: {reportIncomeCategories.some(cat => cat.id === categoryId) ? 'ingresos' : 'gastos'} registrados
                 </strong>
                 {categoryExpenses.length === 0 ? (
                   <span style={{ color: '#6c757d' }}>No hay gastos para esta categoría en el periodo seleccionado.</span>
@@ -3069,7 +3357,7 @@ function Expenses() {
                               onChange={event => setEditingValues({ ...editingValues, category: event.target.value })}
                               style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
                             >
-                              {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                              {(editingValues.type === 'income' ? reportIncomeCategories : reportExpenseCategories).map(option => (
                                 <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
                               ))}
                             </select>
@@ -3111,14 +3399,17 @@ function Expenses() {
                             <button
                               type="button"
                               onClick={() => editExpense(expense)}
+                              disabled={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id}
+                              title={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'Los saldos iniciales no se pueden editar.' : undefined}
                               aria-label={`Editar gasto: ${expense.description}`}
-                              style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                              style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'not-allowed' : 'pointer', opacity: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 0.5 : 1, fontSize: '16px' }}
                             >
                               ✏️
                             </button>
                             <button
                               type="button"
                               onClick={() => deleteExpense(expense.id)}
+                              title={goalAccountMovementCategories.has(expense.category) ? 'Se eliminarán los movimientos de ambas cuentas.' : undefined}
                               aria-label={`Eliminar gasto: ${expense.description}`}
                               style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
                             >
@@ -3187,7 +3478,7 @@ function Expenses() {
           </select>
           <select aria-label="Filtrar historial por categoría" value={historyCategory} onChange={event => setHistoryCategory(event.target.value)} style={{ minWidth: 0, width: '100%', boxSizing: 'border-box', padding: '6px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px' }}>
             <option value="all">Todas las categorías</option>
-            {(historyType === 'expense' ? categories : historyType === 'income' ? incomeCategories : allCategories)
+            {(historyType === 'expense' ? reportExpenseCategories : historyType === 'income' ? reportIncomeCategories : allCategories)
               .map(cat => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}
           </select>
           <label className="history-date-filter" style={{ gap: '4px', color: '#495057', fontSize: '11px' }}>
@@ -3295,7 +3586,7 @@ function Expenses() {
                                 onChange={(e) => setEditingValues({ ...editingValues, category: e.target.value })}
                                 style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', minWidth: 0 }}
                               >
-                                {(editingValues.type === 'income' ? incomeCategories : categories).map(option => (
+                                {(editingValues.type === 'income' ? reportIncomeCategories : reportExpenseCategories).map(option => (
                                   <option key={option.id} value={option.id}>{option.icon} {option.name}</option>
                                 ))}
                               </select>
@@ -3336,13 +3627,16 @@ function Expenses() {
                               </div>
                               <button
                                 onClick={() => editExpense(expense)}
+                                disabled={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id}
+                                title={expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'Los saldos iniciales no se pueden editar.' : undefined}
                                 aria-label={`Editar gasto: ${expense.description}`}
-                                style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
+                                style={{ backgroundColor: '#e9ecef', color: '#495057', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 'not-allowed' : 'pointer', opacity: expense.category === goalOpeningExpenseCategory.id || expense.category === goalOpeningIncomeCategory.id ? 0.5 : 1, fontSize: '16px' }}
                               >
                                 ✏️
                               </button>
                               <button
                                 onClick={() => deleteExpense(expense.id)}
+                                title={goalAccountMovementCategories.has(expense.category) ? 'Se eliminarán los movimientos de ambas cuentas.' : undefined}
                                 aria-label={`Eliminar gasto: ${expense.description}`}
                                 style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', fontSize: '16px' }}
                               >
@@ -3370,6 +3664,47 @@ function Expenses() {
         )}
         </div>
       </div>
+
+      {goalEditConfirmation && (
+        <div
+          role="presentation"
+          onClick={() => setGoalEditConfirmation(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1150,
+            display: 'grid',
+            placeItems: 'center',
+            padding: '20px',
+            backgroundColor: 'rgba(32, 24, 28, 0.48)',
+            backdropFilter: 'blur(3px)'
+          }}
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="goal-edit-title"
+            onClick={event => event.stopPropagation()}
+            style={{ width: 'min(440px, 100%)', boxSizing: 'border-box', padding: '26px', border: '1px solid #dcebe0', borderRadius: '20px', background: 'linear-gradient(145deg, #f8fff9, #ffffff 72%)', boxShadow: '0 24px 70px rgba(32, 24, 28, 0.24)', textAlign: 'center' }}
+          >
+            <div aria-hidden="true" style={{ display: 'grid', width: '54px', height: '54px', margin: '0 auto 15px', placeItems: 'center', borderRadius: '17px', backgroundColor: '#e8f5e9', color: '#18743a', fontSize: '25px' }}>
+              ✏️
+            </div>
+            <h2 id="goal-edit-title" style={{ margin: '0 0 9px', color: '#302b30', fontSize: '21px' }}>¿Confirmar modificación?</h2>
+            <p style={{ margin: 0, color: '#6d6268', fontSize: '14px', lineHeight: 1.6 }}>
+              Se modificarán a la vez los movimientos de la Cuenta general y de la Cuenta de metas.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '22px' }}>
+              <button type="button" onClick={() => setGoalEditConfirmation(null)} style={{ padding: '10px 16px', border: '1px solid #d8c9cf', borderRadius: '10px', backgroundColor: 'white', color: '#5d5057', fontWeight: 700, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmGoalEdit} style={{ padding: '10px 16px', border: 'none', borderRadius: '10px', backgroundColor: '#18743a', color: 'white', fontWeight: 700, cursor: 'pointer' }}>
+                Sí, modificar ambos
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {(expenseIdToDelete !== null || goalIdToDelete !== null || recurringIdToDelete !== null) && (
         <div
@@ -3430,6 +3765,11 @@ function Expenses() {
                   ? '¿Eliminar movimiento recurrente?'
                   : '¿Eliminar movimiento?'}
             </h2>
+            {expensePendingDeletion && goalAccountMovementCategories.has(expensePendingDeletion.category) && (
+              <p style={{ margin: '0 0 10px', color: '#b42318', fontSize: '14px', lineHeight: 1.6, fontWeight: 700 }}>
+                Se eliminarán los movimientos de la Cuenta general y de la Cuenta de metas, y se ajustará el saldo de la meta.
+              </p>
+            )}
             <p id="delete-item-description" style={{ margin: 0, color: '#6d6268', fontSize: '14px', lineHeight: 1.6 }}>
               {goalIdToDelete !== null
                 ? `Vas a eliminar la meta «${savingsGoals.find(goal => goal.id === goalIdToDelete)?.name || 'esta meta'}». Esta acción no se puede deshacer.`

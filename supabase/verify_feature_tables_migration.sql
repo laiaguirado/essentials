@@ -6,6 +6,21 @@ with expected as (
   where key = 'dailyTasks'
   union all
   select
+    'dailySubtasks',
+    coalesce(sum(
+      case
+        when jsonb_typeof(item.value->'subtasks') = 'array'
+          then jsonb_array_length(item.value->'subtasks')
+        else 0
+      end
+    ), 0)::bigint
+  from public.user_data source
+  cross join lateral jsonb_array_elements(
+    case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
+  ) item(value)
+  where source.key = 'dailyTasks'
+  union all
+  select
     'dailyHabits',
     (
       select count(*)::bigint
@@ -71,6 +86,8 @@ with expected as (
 ),
 migrated as (
   select 'dailyTasks' as data_key, count(*)::bigint as row_count from public.daily_tasks
+  union all
+  select 'dailySubtasks', count(*)::bigint from public.daily_subtasks
   union all
   select 'dailyHabits', count(*)::bigint from public.daily_habits
   union all

@@ -4,11 +4,11 @@ import { supabase } from './supabase.js'
 import UserDataContext from './UserDataContext.js'
 import { getTableRowIdentity, recordsFromTableRows, tableConfigForKey, toTableRows } from './userDataTables.js'
 const MIGRATION_MARKER = 'essentials-cloud-migration-v1'
-const LOCAL_KEYS = ['dailyTasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes']
+const LOCAL_KEYS = ['dailyTasks', 'dailySubtasks', 'dailyHabits', 'dailyReminders', 'expenses', 'expenseBudgets', 'recurringMovements', 'savingsGoals', 'notes']
 const DATA_KEYS = LOCAL_KEYS
 
 function readLocalData() {
-  return LOCAL_KEYS.flatMap(key => {
+  const records = LOCAL_KEYS.flatMap(key => {
     const rawValue = localStorage.getItem(key)
     if (rawValue === null) return []
 
@@ -19,7 +19,7 @@ function readLocalData() {
       throw new Error(`No se pudo leer el dato local "${key}". No se ha migrado ni borrado.`)
     }
 
-    if ((key === 'dailyTasks' || key === 'dailyReminders' || key === 'notes') && !Array.isArray(value)) {
+    if ((key === 'dailyTasks' || key === 'dailySubtasks' || key === 'dailyReminders' || key === 'notes') && !Array.isArray(value)) {
       throw new Error(`El dato local "${key}" tiene un formato no válido. No se ha migrado ni borrado.`)
     }
     if (key === 'expenses' && !Array.isArray(value)) {
@@ -56,6 +56,31 @@ function readLocalData() {
 
     return [{ key, value }]
   })
+
+  const tasksRecord = records.find(record => record.key === 'dailyTasks')
+  if (tasksRecord) {
+    const legacySubtasks = []
+    tasksRecord.value = tasksRecord.value.map(task => {
+      if (Array.isArray(task.subtasks)) {
+        legacySubtasks.push(...task.subtasks.map(subtask => ({ ...subtask, taskId: task.id })))
+      }
+      const taskWithoutSubtasks = { ...task }
+      delete taskWithoutSubtasks.subtasks
+      return taskWithoutSubtasks
+    })
+
+    if (legacySubtasks.length > 0) {
+      const subtasksRecord = records.find(record => record.key === 'dailySubtasks')
+      if (subtasksRecord) {
+        const existingIds = new Set(subtasksRecord.value.map(subtask => `${subtask.taskId}:${subtask.id}`))
+        subtasksRecord.value.push(...legacySubtasks.filter(subtask => !existingIds.has(`${subtask.taskId}:${subtask.id}`)))
+      } else {
+        records.push({ key: 'dailySubtasks', value: legacySubtasks })
+      }
+    }
+  }
+
+  return records
 }
 
 async function loadTableData(userId) {
@@ -148,7 +173,9 @@ export function UserDataProvider({ userId, children }) {
       } catch (error) {
         if (!active) return
         const migrationHint = error.code === '42P01'
-          ? ' Ejecuta supabase/migrate_user_data_to_feature_tables.sql en el SQL Editor de Supabase.'
+          ? error.message.includes('daily_subtasks')
+            ? ' Ejecuta supabase/add_daily_subtasks.sql en el SQL Editor de Supabase.'
+            : ' Ejecuta supabase/migrate_user_data_to_feature_tables.sql en el SQL Editor de Supabase.'
           : ''
         setLoadError(`No se pudieron cargar tus datos: ${error.message}.${migrationHint}`)
         return
@@ -200,6 +227,8 @@ export function UserDataProvider({ userId, children }) {
   const persist = useCallback((key) => {
     const previous = saveQueues.current[key] || Promise.resolve()
     const operation = previous.catch(() => {}).then(async () => {
+      if (key === 'dailySubtasks') await saveQueues.current.dailyTasks
+
       const currentRecords = latestRecords.current
       if (!currentRecords || JSON.stringify(currentRecords[key]) === JSON.stringify(savedRecords.current[key])) {
         return

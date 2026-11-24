@@ -1753,3 +1753,27 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
     margin-bottom: 18px;
   }
 }
+
+.calendar-detail-item-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.calendar-detail-item-content input {
+  flex: 0 0 auto;
+}
+.calendar-detail-item-content a {
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+.calendar-detail-item-content a:hover {
+  color: #cf467a;
+  text-decoration: underline;
+}
+.calendar-detail-item.is-completed .calendar-detail-item-content a {
+  color: #a1949a;
+  text-decoration: line-through;
+}

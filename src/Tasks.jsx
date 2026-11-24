@@ -5,10 +5,15 @@ import './App.css'
 
 function Tasks() {
   const [tasks, setTasks] = useUserData('dailyTasks', [])
+  const [subtasks, setSubtasks] = useUserData('dailySubtasks', [])
   const [newTask, setNewTask] = useState('')
   const [showCompleted, setShowCompleted] = useState(true)
   const [editingTaskId, setEditingTaskId] = useState(null)
   const [editingText, setEditingText] = useState('')
+  const [expandedTaskId, setExpandedTaskId] = useState(null)
+  const [newSubtask, setNewSubtask] = useState('')
+  const [editingSubtask, setEditingSubtask] = useState(null)
+  const [editingSubtaskText, setEditingSubtaskText] = useState('')
 
   const addTask = () => {
     if (newTask.trim()) {
@@ -37,29 +42,254 @@ function Tasks() {
   }
 
   const toggleTask = (id) => {
-    setTasks(tasks.map(task => 
+    setTasks(current => current.map(task =>
       task.id === id ? { ...task, completed: !task.completed } : task
     ))
   }
 
+  const addSubtask = (event, taskId) => {
+    event.preventDefault()
+    const text = newSubtask.trim()
+    if (!text) return
+
+    setSubtasks(current => [...current, {
+      id: `${Date.now()}-${Math.random()}`,
+      taskId,
+      text,
+      completed: false
+    }])
+    setNewSubtask('')
+  }
+
+  const toggleSubtask = (taskId, subtaskId) => {
+    setSubtasks(current => current.map(subtask => (
+      subtask.taskId === taskId && subtask.id === subtaskId
+        ? { ...subtask, completed: !subtask.completed }
+        : subtask
+    )))
+  }
+
+  const startEditingSubtask = (taskId, subtask) => {
+    setEditingSubtask({ taskId, subtaskId: subtask.id })
+    setEditingSubtaskText(subtask.text)
+  }
+
+  const saveSubtaskEdit = () => {
+    const text = editingSubtaskText.trim()
+    if (!text || !editingSubtask) return
+
+    setSubtasks(current => current.map(subtask => (
+      subtask.taskId === editingSubtask.taskId && subtask.id === editingSubtask.subtaskId
+        ? { ...subtask, text }
+        : subtask
+    )))
+    setEditingSubtask(null)
+    setEditingSubtaskText('')
+  }
+
+  const cancelSubtaskEdit = () => {
+    setEditingSubtask(null)
+    setEditingSubtaskText('')
+  }
+
+  const deleteSubtask = (taskId, subtaskId) => {
+    setSubtasks(current => current.filter(subtask => (
+      subtask.taskId !== taskId || subtask.id !== subtaskId
+    )))
+    if (editingSubtask?.taskId === taskId && editingSubtask.subtaskId === subtaskId) {
+      cancelSubtaskEdit()
+    }
+  }
+
   const deleteTask = (id) => {
     setTasks(tasks.filter(task => task.id !== id))
+    setSubtasks(current => current.filter(subtask => subtask.taskId !== id))
   }
 
   const clearCompletedTasks = () => {
     if (window.confirm('¿Seguro que quieres borrar todas las tareas completadas?')) {
       setTasks(tasks.filter(task => !task.completed))
+      const completedTaskIds = new Set(tasks.filter(task => task.completed).map(task => task.id))
+      setSubtasks(current => current.filter(subtask => !completedTaskIds.has(subtask.taskId)))
     }
   }
 
   const clearAllTasks = () => {
     if (window.confirm('¿Seguro que quieres borrar TODAS las tareas? Esta acción no se puede deshacer.')) {
       setTasks([])
+      setSubtasks([])
     }
   }
 
   const activeTasks = tasks.filter(task => !task.completed)
   const completedTasks = tasks.filter(task => task.completed)
+
+  const renderTask = (task) => {
+    const taskSubtasks = subtasks.filter(subtask => subtask.taskId === task.id)
+    const isExpanded = expandedTaskId === task.id
+
+    return (
+      <div
+        key={task.id}
+        onClick={event => event.stopPropagation()}
+        style={{
+          padding: '6px 10px',
+          borderBottom: '1px solid #eee',
+          backgroundColor: task.completed ? '#f8f9fa' : 'white'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input
+            type="checkbox"
+            checked={task.completed}
+            onChange={() => toggleTask(task.id)}
+            aria-label={`Marcar tarea como ${task.completed ? 'pendiente' : 'completada'}: ${task.text}`}
+            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+          />
+          {editingTaskId === task.id ? (
+            <input
+              type="text"
+              value={editingText}
+              onChange={event => setEditingText(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') saveTaskEdit(task.id)
+                if (event.key === 'Escape') cancelTaskEdit()
+              }}
+              aria-label="Editar tarea"
+              autoFocus
+              style={{ flex: 1, minWidth: 0, padding: '8px', fontSize: '16px' }}
+            />
+          ) : (
+            <span
+              style={{
+                flex: 1,
+                textDecoration: task.completed ? 'line-through' : 'none',
+                color: task.completed ? '#28a745' : '#333',
+                fontSize: '16px'
+              }}
+            >
+              {task.text}
+            </span>
+          )}
+          {editingTaskId === task.id ? (
+            <>
+              <button onClick={() => saveTaskEdit(task.id)} disabled={!editingText.trim()}>
+                Guardar
+              </button>
+              <button onClick={cancelTaskEdit}>Cancelar</button>
+            </>
+          ) : (
+            <button
+              className="task-icon-button"
+              onClick={() => startEditingTask(task)}
+              aria-label={`Editar tarea: ${task.text}`}
+              title="Editar tarea"
+            >
+              ✏️
+            </button>
+          )}
+          <button
+            className="task-icon-button task-icon-delete"
+            onClick={() => deleteTask(task.id)}
+            aria-label={`Eliminar tarea: ${task.text}`}
+            title="Eliminar tarea"
+          >
+            🗑️
+          </button>
+          <button
+            type="button"
+            className="task-icon-button"
+            onClick={() => {
+              setExpandedTaskId(isExpanded ? null : task.id)
+              setNewSubtask('')
+            }}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Ocultar' : 'Mostrar'} subtareas de ${task.text} (${taskSubtasks.length})`}
+            title="Subtareas"
+            style={{ width: '46px' }}
+          >
+            ☷<span style={{ marginLeft: '3px', fontSize: '11px' }}>{taskSubtasks.length}</span>
+          </button>
+        </div>
+        {isExpanded && (
+          <div style={{ marginLeft: '28px', marginTop: '8px' }}>
+            <div style={{ marginTop: '8px', paddingLeft: '10px', borderLeft: '2px solid #dee2e6' }}>
+              {taskSubtasks.map(subtask => (
+                <div key={subtask.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(subtask.completed)}
+                    onChange={() => toggleSubtask(task.id, subtask.id)}
+                    aria-label={`Marcar subtarea como ${subtask.completed ? 'pendiente' : 'completada'}: ${subtask.text}`}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  {editingSubtask?.taskId === task.id && editingSubtask.subtaskId === subtask.id ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingSubtaskText}
+                        onChange={event => setEditingSubtaskText(event.target.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') saveSubtaskEdit()
+                          if (event.key === 'Escape') cancelSubtaskEdit()
+                        }}
+                        aria-label={`Editar subtarea: ${subtask.text}`}
+                        autoFocus
+                        style={{ flex: 1, minWidth: 0, padding: '6px', border: '1px solid #ddd', borderRadius: '6px' }}
+                      />
+                      <button type="button" onClick={saveSubtaskEdit} disabled={!editingSubtaskText.trim()}>
+                        Guardar
+                      </button>
+                      <button type="button" onClick={cancelSubtaskEdit}>
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ flex: 1, color: subtask.completed ? '#999' : '#495057', textDecoration: subtask.completed ? 'line-through' : 'none', fontSize: '14px' }}>
+                        {subtask.text}
+                      </span>
+                      <button
+                        type="button"
+                        className="task-icon-button"
+                        onClick={() => startEditingSubtask(task.id, subtask)}
+                        aria-label={`Editar subtarea: ${subtask.text}`}
+                        title="Editar subtarea"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        className="task-icon-button task-icon-delete"
+                        onClick={() => deleteSubtask(task.id, subtask.id)}
+                        aria-label={`Eliminar subtarea: ${subtask.text}`}
+                        title="Eliminar subtarea"
+                      >
+                        🗑️
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+              <form onSubmit={event => addSubtask(event, task.id)} style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                <input
+                  type="text"
+                  value={newSubtask}
+                  onChange={event => setNewSubtask(event.target.value)}
+                  aria-label={`Nueva subtarea para ${task.text}`}
+                  placeholder="Añadir subtarea..."
+                  style={{ flex: 1, minWidth: 0, padding: '7px', border: '1px solid #ddd', borderRadius: '6px' }}
+                />
+                <button type="submit" disabled={!newSubtask.trim()}>
+                  Añadir
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="tasks-page" style={{ minHeight: '100vh', padding: '2rem', backgroundColor: '#f5f5f5' }}>
@@ -124,76 +354,7 @@ function Tasks() {
           {activeTasks.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#666' }}>No tienes tareas pendientes. ¡Buen trabajo!</p>
           ) : (
-            activeTasks.map(task => (
-              <div
-                key={task.id}
-                onClick={event => event.stopPropagation()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '6px 10px',
-                  borderBottom: '1px solid #eee',
-                  gap: '8px'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  onChange={() => toggleTask(task.id)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                {editingTaskId === task.id ? (
-                  <input
-                    type="text"
-                    value={editingText}
-                    onChange={event => setEditingText(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter') saveTaskEdit(task.id)
-                      if (event.key === 'Escape') cancelTaskEdit()
-                    }}
-                    aria-label="Editar tarea"
-                    autoFocus
-                    style={{ flex: 1, minWidth: 0, padding: '8px', fontSize: '16px' }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      flex: 1,
-                      textDecoration: task.completed ? 'line-through' : 'none',
-                      color: task.completed ? '#999' : '#333',
-                      fontSize: '16px'
-                    }}
-                  >
-                    {task.text}
-                  </span>
-                )}
-                {editingTaskId === task.id ? (
-                  <>
-                    <button onClick={() => saveTaskEdit(task.id)} disabled={!editingText.trim()}>
-                      Guardar
-                    </button>
-                    <button onClick={cancelTaskEdit}>Cancelar</button>
-                  </>
-                ) : (
-                  <button
-                    className="task-icon-button"
-                    onClick={() => startEditingTask(task)}
-                    aria-label={`Editar tarea: ${task.text}`}
-                    title="Editar tarea"
-                  >
-                    ✏️
-                  </button>
-                )}
-                <button
-                  className="task-icon-button task-icon-delete"
-                  onClick={() => deleteTask(task.id)}
-                  aria-label={`Eliminar tarea: ${task.text}`}
-                  title="Eliminar tarea"
-                >
-                  🗑️
-                </button>
-              </div>
-            ))
+            activeTasks.map(renderTask)
           )}
         </div>
 
@@ -219,82 +380,7 @@ function Tasks() {
             
             {showCompleted && (
               <div>
-                {completedTasks.map(task => (
-                  <div
-                    key={task.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '6px 10px',
-                      borderBottom: '1px solid #eee',
-                      gap: '8px',
-                      backgroundColor: '#f8f9fa'
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => toggleTask(task.id)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    {editingTaskId === task.id ? (
-                      <input
-                        type="text"
-                        value={editingText}
-                        onChange={event => setEditingText(event.target.value)}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') saveTaskEdit(task.id)
-                          if (event.key === 'Escape') cancelTaskEdit()
-                        }}
-                        aria-label="Editar tarea"
-                        autoFocus
-                        style={{ flex: 1, minWidth: 0, padding: '8px', fontSize: '16px' }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          flex: 1,
-                          textDecoration: 'line-through',
-                          color: '#28a745',
-                          fontSize: '16px'
-                        }}
-                      >
-                        {task.text}
-                      </span>
-                    )}
-                    {editingTaskId === task.id ? (
-                      <>
-                        <button onClick={() => saveTaskEdit(task.id)} disabled={!editingText.trim()}>
-                          Guardar
-                        </button>
-                        <button onClick={cancelTaskEdit}>Cancelar</button>
-                      </>
-                    ) : (
-                      <button
-                        className="task-icon-button"
-                        onClick={event => {
-                          event.stopPropagation()
-                          startEditingTask(task)
-                        }}
-                        aria-label={`Editar tarea: ${task.text}`}
-                        title="Editar tarea"
-                      >
-                        ✏️
-                      </button>
-                    )}
-                    <button
-                      className="task-icon-button task-icon-delete"
-                      onClick={event => {
-                        event.stopPropagation()
-                        deleteTask(task.id)
-                      }}
-                      aria-label={`Eliminar tarea: ${task.text}`}
-                      title="Eliminar tarea"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                ))}
+                {completedTasks.map(renderTask)}
               </div>
             )}
           </div>

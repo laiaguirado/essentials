@@ -1,8 +1,9 @@
 const tableByKey = {
   dailyTasks: { table: 'daily_tasks', identity: ['id'], columns: 'id,text,completed,due_date' },
+  dailySubtasks: { table: 'daily_subtasks', identity: ['task_id', 'id'], columns: 'task_id,id,text,completed' },
   dailyHabits: { table: 'daily_habits', identity: ['habit_key'], columns: 'habit_key,value' },
   dailyReminders: { table: 'daily_reminders', identity: ['id'], columns: 'id,task,due_date,category,completed' },
-  expenses: { table: 'expense_movements', identity: ['id'], columns: 'id,description,amount,category,type,movement_date' },
+  expenses: { table: 'expense_movements', identity: ['id'], columns: 'id,description,amount,category,type,movement_date,account' },
   expenseBudgets: { table: 'expense_budgets', identity: ['month', 'category'], columns: 'month,category,amount' },
   recurringMovements: { table: 'expense_recurring_movements', identity: ['id'], columns: 'id,description,amount,category,type,frequency,next_date,day_of_month' },
   savingsGoals: { table: 'expense_savings_goals', identity: ['id'], columns: 'id,name,target,saved' },
@@ -69,6 +70,14 @@ export function toTableRows(key, value, userId) {
         completed: Boolean(item.completed),
         due_date: toIsoDate(item.date)
       }))
+    case 'dailySubtasks':
+      return baseRows.map(item => ({
+        user_id: userId,
+        task_id: String(item.taskId),
+        id: String(item.id),
+        text: item.text || '',
+        completed: Boolean(item.completed)
+      }))
     case 'dailyHabits':
       return Object.entries(value || {}).map(([habit_key, habitValue]) => ({
         user_id: userId,
@@ -94,7 +103,8 @@ export function toTableRows(key, value, userId) {
           amount: Number(item.amount) || 0,
           category,
           type: item.type === 'income' ? 'income' : 'expense',
-          movement_date: toIsoDate(item.date)
+          movement_date: toIsoDate(item.date),
+          account: item.account === 'goals' ? 'goals' : 'general'
         }
       })
     case 'expenseBudgets':
@@ -156,6 +166,13 @@ export function recordsFromTableRows(rowsByKey) {
         completed: row.completed,
         ...(row.due_date ? { date: row.due_date } : {})
       }))
+    } else if (key === 'dailySubtasks') {
+      records[key] = rows.map(row => ({
+        taskId: restoreId(row.task_id),
+        id: restoreId(row.id),
+        text: row.text,
+        completed: row.completed
+      }))
     } else if (key === 'dailyReminders') {
       records[key] = rows.map(row => ({
         id: restoreId(row.id),
@@ -171,6 +188,7 @@ export function recordsFromTableRows(rowsByKey) {
         amount: Number(row.amount),
         category: row.category,
         type: row.type,
+        account: row.account === 'goals' ? 'goals' : 'general',
         date: formatMovementDate(row.movement_date)
       }))
     } else if (key === 'recurringMovements') {

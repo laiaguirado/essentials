@@ -6,8 +6,19 @@ create table if not exists public.daily_tasks (
   text text not null default '',
   completed boolean not null default false,
   due_date date,
-  payload jsonb not null default '{}'::jsonb,
   primary key (user_id, id)
+);
+
+create table if not exists public.daily_subtasks (
+  user_id uuid not null,
+  task_id text not null,
+  id text not null,
+  text text not null default '',
+  completed boolean not null default false,
+  primary key (user_id, task_id, id),
+  foreign key (user_id, task_id)
+    references public.daily_tasks (user_id, id)
+    on delete cascade
 );
 
 create table if not exists public.daily_habits (
@@ -24,7 +35,6 @@ create table if not exists public.daily_reminders (
   due_date date,
   category text not null default '',
   completed boolean not null default false,
-  payload jsonb not null default '{}'::jsonb,
   primary key (user_id, id)
 );
 
@@ -36,9 +46,17 @@ create table if not exists public.expense_movements (
   category text not null default 'general',
   type text not null default 'expense' check (type in ('expense', 'income')),
   movement_date date,
-  payload jsonb not null default '{}'::jsonb,
+  account text not null default 'general' check (account in ('general', 'goals')),
   primary key (user_id, id)
 );
+
+alter table public.expense_movements
+  add column if not exists account text not null default 'general';
+alter table public.expense_movements
+  drop constraint if exists expense_movements_account_check;
+alter table public.expense_movements
+  add constraint expense_movements_account_check
+  check (account in ('general', 'goals'));
 
 create table if not exists public.expense_budgets (
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -58,7 +76,6 @@ create table if not exists public.expense_recurring_movements (
   frequency text not null default 'monthly',
   next_date date,
   day_of_month integer,
-  payload jsonb not null default '{}'::jsonb,
   primary key (user_id, id)
 );
 
@@ -68,7 +85,6 @@ create table if not exists public.expense_savings_goals (
   name text not null default '',
   target numeric(14, 2) not null default 0,
   saved numeric(14, 2) not null default 0,
-  payload jsonb not null default '{}'::jsonb,
   primary key (user_id, id)
 );
 
@@ -78,7 +94,6 @@ create table if not exists public.notes (
   title text not null default '',
   content text not null default '',
   updated_at timestamptz,
-  payload jsonb not null default '{}'::jsonb,
   primary key (user_id, id)
 );
 
@@ -111,6 +126,7 @@ declare
 begin
   foreach table_name in array array[
     'daily_tasks',
+    'daily_subtasks',
     'daily_habits',
     'daily_reminders',
     'expense_movements',
@@ -159,7 +175,7 @@ begin
 end
 $$;
 
-insert into public.daily_tasks (user_id, id, text, completed, due_date, payload)
+insert into public.daily_tasks (user_id, id, text, completed, due_date)
 select
   source.user_id,
   coalesce(item.value->>'id', md5(item.value::text)),
@@ -169,14 +185,63 @@ select
     when item.value->>'date' ~ '^\d{1,2}/\d{1,2}/\d{4}$' then to_date(item.value->>'date', 'DD/MM/YYYY')
     when item.value->>'date' ~ '^\d{4}-\d{2}-\d{2}' then (item.value->>'date')::date
     else null
-  end,
-  item.value
+  end
 from public.user_data source
 cross join lateral jsonb_array_elements(
   case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
 ) item(value)
 where source.key = 'dailyTasks'
 on conflict (user_id, id) do nothing;
+
+insert into public.daily_subtasks (user_id, task_id, id, text, completed)
+select
+  source.user_id,
+  coalesce(task.value->>'id', md5(task.value::text)),
+  coalesce(subtask.value->>'id', coalesce(task.value->>'id', md5(task.value::text)) || ':' || subtask.ordinality::text),
+  coalesce(subtask.value->>'text', ''),
+  coalesce((subtask.value->>'completed')::boolean, false)
+from public.user_data source
+cross join lateral jsonb_array_elements(
+  case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
+) task(value)
+cross join lateral jsonb_array_elements(
+  case
+    when jsonb_typeof(task.value->'subtasks') = 'array' then task.value->'subtasks'
+    else '[]'::jsonb
+  end
+) with ordinality as subtask(value, ordinality)
+where source.key = 'dailyTasks'
+on conflict (user_id, task_id, id) do nothing;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'daily_tasks'
+      and column_name = 'payload'
+  ) then
+    execute $migration$
+      insert into public.daily_subtasks (user_id, task_id, id, text, completed)
+      select
+        task.user_id,
+        task.id,
+        coalesce(subtask.value->>'id', task.id || ':' || subtask.ordinality::text),
+        coalesce(subtask.value->>'text', ''),
+        coalesce((subtask.value->>'completed')::boolean, false)
+      from public.daily_tasks task
+      cross join lateral jsonb_array_elements(
+        case
+          when jsonb_typeof(task.payload->'subtasks') = 'array' then task.payload->'subtasks'
+          else '[]'::jsonb
+        end
+      ) with ordinality as subtask(value, ordinality)
+      on conflict (user_id, task_id, id) do nothing
+    $migration$;
+  end if;
+end
+$$;
 
 insert into public.daily_habits (user_id, habit_key, value)
 select source.user_id, habit.key, habit.value
@@ -187,7 +252,7 @@ cross join lateral jsonb_each(
 where source.key = 'dailyHabits'
 on conflict (user_id, habit_key) do nothing;
 
-insert into public.daily_reminders (user_id, id, task, due_date, category, completed, payload)
+insert into public.daily_reminders (user_id, id, task, due_date, category, completed)
 select
   source.user_id,
   coalesce(item.value->>'id', md5(item.value::text)),
@@ -198,8 +263,7 @@ select
     else null
   end,
   coalesce(item.value->>'category', ''),
-  coalesce((item.value->>'completed')::boolean, false),
-  item.value
+  coalesce((item.value->>'completed')::boolean, false)
 from public.user_data source
 cross join lateral jsonb_array_elements(
   case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
@@ -207,7 +271,7 @@ cross join lateral jsonb_array_elements(
 where source.key = 'dailyReminders'
 on conflict (user_id, id) do nothing;
 
-insert into public.expense_movements (user_id, id, description, amount, category, type, movement_date, payload)
+insert into public.expense_movements (user_id, id, description, amount, category, type, movement_date)
 select
   source.user_id,
   coalesce(item.value->>'id', md5(item.value::text)),
@@ -219,10 +283,6 @@ select
     when item.value->>'date' ~ '^\d{1,2}/\d{1,2}/\d{4}$' then to_date(item.value->>'date', 'DD/MM/YYYY')
     when item.value->>'date' ~ '^\d{4}-\d{2}-\d{2}' then (item.value->>'date')::date
     else null
-  end,
-  case
-    when item.value->>'category' = 'comida' then jsonb_set(item.value, '{category}', '"restaurantes"'::jsonb)
-    else item.value
   end
 from public.user_data source
 cross join lateral jsonb_array_elements(
@@ -256,7 +316,7 @@ where source.key = 'expenseBudgets'
 on conflict (user_id, month, category) do nothing;
 
 insert into public.expense_recurring_movements (
-  user_id, id, description, amount, category, type, frequency, next_date, day_of_month, payload
+  user_id, id, description, amount, category, type, frequency, next_date, day_of_month
 )
 select
   source.user_id,
@@ -271,8 +331,7 @@ select
     when item.value->>'nextDate' ~ '^\d{4}-\d{2}-\d{2}' then (item.value->>'nextDate')::date
     else null
   end,
-  nullif(item.value->>'dayOfMonth', '')::integer,
-  item.value
+  nullif(item.value->>'dayOfMonth', '')::integer
 from public.user_data source
 cross join lateral jsonb_array_elements(
   case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
@@ -280,14 +339,13 @@ cross join lateral jsonb_array_elements(
 where source.key = 'recurringMovements'
 on conflict (user_id, id) do nothing;
 
-insert into public.expense_savings_goals (user_id, id, name, target, saved, payload)
+insert into public.expense_savings_goals (user_id, id, name, target, saved)
 select
   source.user_id,
   coalesce(item.value->>'id', md5(item.value::text)),
   coalesce(item.value->>'name', ''),
   coalesce(nullif(item.value->>'target', '')::numeric, 0),
-  coalesce(nullif(item.value->>'saved', '')::numeric, 0),
-  item.value
+  coalesce(nullif(item.value->>'saved', '')::numeric, 0)
 from public.user_data source
 cross join lateral jsonb_array_elements(
   case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
@@ -295,19 +353,41 @@ cross join lateral jsonb_array_elements(
 where source.key = 'savingsGoals'
 on conflict (user_id, id) do nothing;
 
-insert into public.notes (user_id, id, title, content, updated_at, payload)
+insert into public.expense_movements (
+  user_id, id, description, amount, category, type, movement_date, account
+)
+select
+  user_id,
+  'goal-opening-' || id || '-goals',
+  'Saldo inicial de meta: ' || name || ' (Cuenta metas)',
+  saved,
+  'goal-opening',
+  'income',
+  current_date,
+  'goals'
+from public.expense_savings_goals
+where saved > 0
+on conflict (user_id, id) do nothing;
+
+insert into public.notes (user_id, id, title, content, updated_at)
 select
   source.user_id,
   coalesce(item.value->>'id', md5(item.value::text)),
   coalesce(item.value->>'title', ''),
   coalesce(item.value->>'content', ''),
-  nullif(item.value->>'updatedAt', '')::timestamptz,
-  item.value
+  nullif(item.value->>'updatedAt', '')::timestamptz
 from public.user_data source
 cross join lateral jsonb_array_elements(
   case when jsonb_typeof(source.value) = 'array' then source.value else '[]'::jsonb end
 ) item(value)
 where source.key = 'notes'
 on conflict (user_id, id) do nothing;
+
+alter table public.daily_tasks drop column if exists payload;
+alter table public.daily_reminders drop column if exists payload;
+alter table public.expense_movements drop column if exists payload;
+alter table public.expense_recurring_movements drop column if exists payload;
+alter table public.expense_savings_goals drop column if exists payload;
+alter table public.notes drop column if exists payload;
 
 commit;
